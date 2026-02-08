@@ -88,6 +88,14 @@ public class ProviderInfo {
             Arrays.asList(AuthMethod.API_KEY),
             false
         ));
+
+        providers.add(new ProviderInfo(
+            "kimi-coding",
+            "kimi-coding",
+            "kimi-coding/k2p5",
+            Arrays.asList(AuthMethod.API_KEY),
+            false
+        ));
         
         return providers;
     }

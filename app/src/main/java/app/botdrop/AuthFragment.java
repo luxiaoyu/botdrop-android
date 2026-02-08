@@ -457,6 +457,8 @@ public class AuthFragment extends Fragment {
                 return "gemini-3-flash-preview";
             case "openrouter":
                 return "anthropic/claude-sonnet-4";
+            case "kimi-coding":
+                return "k2p5";
             default:
                 return "default";
         }
