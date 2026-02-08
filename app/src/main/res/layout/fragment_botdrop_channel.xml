@@ -23,11 +23,57 @@
         <TextView
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:text="Connect Telegram"
+            android:text="Connect Channel"
             android:textSize="24sp"
             android:textStyle="bold"
             android:textColor="@color/botdrop_on_background"
             android:layout_marginBottom="24dp" />
+
+        <!-- Platform Selection -->
+        <TextView
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:text="Select Platform"
+            android:textSize="16sp"
+            android:textStyle="bold"
+            android:textColor="@color/botdrop_on_background"
+            android:layout_marginBottom="12dp" />
+
+        <RadioGroup
+            android:id="@+id/channel_platform_group"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:layout_marginBottom="24dp">
+
+            <RadioButton
+                android:id="@+id/platform_telegram"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:checked="true"
+                android:text="📱 Telegram"
+                android:textSize="14sp"
+                android:textColor="@color/botdrop_on_background" />
+
+            <RadioButton
+                android:id="@+id/platform_discord"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="💬 Discord"
+                android:textSize="14sp"
+                android:textColor="@color/botdrop_on_background" />
+
+            <RadioButton
+                android:id="@+id/platform_feishu"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="📋 Feishu"
+                android:textSize="14sp"
+                android:textColor="@color/botdrop_on_background" />
+        </RadioGroup>
 
         <!-- Step 1: Setup Bot -->
         <TextView
@@ -77,6 +123,7 @@
 
         <!-- Bot Token -->
         <TextView
+            android:id="@+id/channel_token_label"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="Bot Token (from @BotFather)"
@@ -100,6 +147,7 @@
 
         <!-- User ID -->
         <TextView
+            android:id="@+id/channel_userid_label"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:text="Your User ID (from @BotDropSetupBot)"

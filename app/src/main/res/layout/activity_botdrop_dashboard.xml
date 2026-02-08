@@ -199,6 +199,31 @@
                         android:textSize="14sp"
                         android:textColor="@color/botdrop_secondary_text" />
                 </LinearLayout>
+
+                <LinearLayout
+                    android:id="@+id/feishu_channel_row"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:paddingVertical="4dp">
+
+                    <TextView
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="📋 Feishu"
+                        android:textSize="16sp"
+                        android:textColor="@color/botdrop_on_background" />
+
+                    <TextView
+                        android:id="@+id/feishu_status"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:text="○ —"
+                        android:textSize="14sp"
+                        android:textColor="@color/botdrop_secondary_text" />
+                </LinearLayout>
         </LinearLayout>
 
         <!-- Action Buttons -->

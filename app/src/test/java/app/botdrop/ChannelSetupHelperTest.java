@@ -261,6 +261,75 @@ public class ChannelSetupHelperTest {
     }
 
     /**
+     * Test: Valid Feishu setup code is correctly decoded
+     */
+    @Test
+    public void testDecodeSetupCode_validFeishu_decodesCorrectly() throws JSONException {
+        // Create a valid setup code for Feishu
+        JSONObject payload = new JSONObject();
+        payload.put("v", 1);
+        payload.put("platform", "feishu");
+        payload.put("bot_token", "cli_xxxxxxxxxxxxxxxx");  // Feishu App ID
+        payload.put("owner_id", "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx");  // App Secret
+        payload.put("created_at", 1234567890);
+
+        String base64Payload = Base64.encodeToString(
+            payload.toString().getBytes(),
+            Base64.NO_WRAP
+        );
+        String setupCode = "BOTDROP-fs-" + base64Payload;
+
+        // Decode
+        ChannelSetupHelper.SetupCodeData data = ChannelSetupHelper.decodeSetupCode(setupCode);
+
+        // Verify
+        assertNotNull("Decoded data should not be null", data);
+        assertEquals("feishu", data.platform);
+        assertEquals("cli_xxxxxxxxxxxxxxxx", data.botToken);
+        assertEquals("xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx", data.ownerId);
+    }
+
+    /**
+     * Test: Feishu platform code 'fs' without platform in JSON infers correctly
+     */
+    @Test
+    public void testDecodeSetupCode_feishuPrefix_infersPlatform() throws JSONException {
+        // Create payload without platform field
+        JSONObject payload = new JSONObject();
+        payload.put("v", 1);
+        payload.put("bot_token", "cli_test1234567890");
+        payload.put("owner_id", "testsecret1234567890123456789012");
+
+        String base64Payload = Base64.encodeToString(
+            payload.toString().getBytes(),
+            Base64.NO_WRAP
+        );
+        String setupCode = "BOTDROP-fs-" + base64Payload;
+
+        // Decode
+        ChannelSetupHelper.SetupCodeData data = ChannelSetupHelper.decodeSetupCode(setupCode);
+
+        // Should infer platform from "fs" prefix
+        assertNotNull("Decoded data should not be null", data);
+        assertEquals("feishu", data.platform);
+    }
+
+    /**
+     * Test: writeChannelConfig for Feishu
+     */
+    @Test
+    public void testWriteChannelConfig_feishu_handlesGracefully() {
+        boolean result = ChannelSetupHelper.writeChannelConfig(
+            "feishu",
+            "cli_xxxxxxxxxxxxxxxx",
+            "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+        );
+
+        // In test environment, should return false but not crash
+        assertFalse("Should return false when unable to write to non-existent paths", result);
+    }
+
+    /**
      * Test: SetupCodeData constructor
      */
     @Test
@@ -274,5 +343,21 @@ public class ChannelSetupHelperTest {
         assertEquals("telegram", data.platform);
         assertEquals("test-token", data.botToken);
         assertEquals("test-owner", data.ownerId);
+    }
+
+    /**
+     * Test: SetupCodeData constructor for Feishu
+     */
+    @Test
+    public void testSetupCodeData_constructorFeishu() {
+        ChannelSetupHelper.SetupCodeData data = new ChannelSetupHelper.SetupCodeData(
+            "feishu",
+            "cli_xxxxxxxxxxxxxxxx",
+            "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+        );
+
+        assertEquals("feishu", data.platform);
+        assertEquals("cli_xxxxxxxxxxxxxxxx", data.botToken);
+        assertEquals("xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx", data.ownerId);
     }
 }

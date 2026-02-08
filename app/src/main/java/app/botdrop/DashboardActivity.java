@@ -49,6 +49,7 @@ public class DashboardActivity extends Activity {
     private View mStatusIndicator;
     private TextView mTelegramStatus;
     private TextView mDiscordStatus;
+    private TextView mFeishuStatus;
     private Button mStartButton;
     private Button mStopButton;
     private Button mRestartButton;
@@ -99,6 +100,7 @@ public class DashboardActivity extends Activity {
         mStatusIndicator = findViewById(R.id.status_indicator);
         mTelegramStatus = findViewById(R.id.telegram_status);
         mDiscordStatus = findViewById(R.id.discord_status);
+        mFeishuStatus = findViewById(R.id.feishu_status);
         mStartButton = findViewById(R.id.btn_start);
         mStopButton = findViewById(R.id.btn_stop);
         mRestartButton = findViewById(R.id.btn_restart);
@@ -290,6 +292,15 @@ public class DashboardActivity extends Activity {
                 } else {
                     mDiscordStatus.setText("○ —");
                     mDiscordStatus.setTextColor(ContextCompat.getColor(this, R.color.status_disconnected));
+                }
+
+                // Check Feishu
+                if (channels.has("feishu")) {
+                    mFeishuStatus.setText("● Connected");
+                    mFeishuStatus.setTextColor(ContextCompat.getColor(this, R.color.status_connected));
+                } else {
+                    mFeishuStatus.setText("○ —");
+                    mFeishuStatus.setTextColor(ContextCompat.getColor(this, R.color.status_disconnected));
                 }
             }
         } catch (Exception e) {

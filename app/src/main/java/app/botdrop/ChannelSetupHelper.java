@@ -12,6 +12,11 @@ import org.json.JSONObject;
  * Helper for channel setup:
  * - Decode setup codes from @BotDropSetupBot
  * - Write channel configuration to openclaw.json
+ * 
+ * Supported platforms:
+ * - Telegram (tg)
+ * - Discord (dc)
+ * - Feishu/Lark (fs)
  */
 public class ChannelSetupHelper {
 
@@ -39,11 +44,12 @@ public class ChannelSetupHelper {
      * Platform codes:
      * - tg = Telegram
      * - dc = Discord
+     * - fs = Feishu (Lark)
      * 
      * Base64 JSON structure:
      * {
      *   "v": 1,
-     *   "platform": "telegram" | "discord",
+     *   "platform": "telegram" | "discord" | "feishu",
      *   "bot_token": "...",
      *   "owner_id": "...",
      *   "created_at": 1234567890
@@ -81,7 +87,8 @@ public class ChannelSetupHelper {
             // Fallback: infer platform from code if not in JSON
             if (platform == null) {
                 platform = platformCode.equals("tg") ? "telegram" :
-                          platformCode.equals("dc") ? "discord" : null;
+                          platformCode.equals("dc") ? "discord" :
+                          platformCode.equals("fs") ? "feishu" : null;
             }
 
             if (platform == null || botToken == null || ownerId == null) {
@@ -103,10 +110,11 @@ public class ChannelSetupHelper {
      *
      * For Telegram: { channels: { telegram: { enabled: true, botToken: "...", dmPolicy: "pairing" } } }
      * For Discord:  { channels: { discord: { enabled: true, token: "..." } } }
+     * For Feishu:   { channels: { feishu: { enabled: true, appId: "...", appSecret: "..." } } }
      *
-     * @param platform "telegram" or "discord"
-     * @param botToken Bot token
-     * @param ownerId User ID who owns/controls the bot (used for allowFrom)
+     * @param platform "telegram", "discord", or "feishu"
+     * @param botToken Bot token (for Feishu, this is the App ID)
+     * @param ownerId User ID who owns/controls the bot (for Feishu, this is the App Secret)
      * @return true if successful
      */
     public static boolean writeChannelConfig(String platform, String botToken, String ownerId) {
@@ -136,6 +144,16 @@ public class ChannelSetupHelper {
                 discord.put("enabled", true);
                 discord.put("token", botToken);
                 channels.put("discord", discord);
+
+            } else if (platform.equals("feishu")) {
+                JSONObject feishu = new JSONObject();
+                feishu.put("enabled", true);
+                feishu.put("appId", botToken);
+                feishu.put("appSecret", ownerId);
+                // Feishu specific settings
+                feishu.put("encryptKey", "");
+                feishu.put("verificationToken", "");
+                channels.put("feishu", feishu);
 
             } else {
                 Logger.logError(LOG_TAG, "Unsupported platform: " + platform);
