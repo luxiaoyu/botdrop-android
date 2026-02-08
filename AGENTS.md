@@ -46,24 +46,31 @@ botdrop-android/
 │   ├── src/main/java/
 │   │   ├── app/botdrop/          # BotDrop GUI components
 │   │   │   ├── BotDropLauncherActivity.java   # Entry point & routing
-│   │   │   ├── SetupActivity.java             # 3-step setup wizard
+│   │   │   ├── SetupActivity.java             # 4-step setup wizard
 │   │   │   ├── DashboardActivity.java         # Status dashboard
 │   │   │   ├── BotDropService.java            # Background command execution
+│   │   │   ├── GatewayMonitorService.java     # Foreground service for gateway
 │   │   │   ├── BotDropConfig.java             # Config file I/O
 │   │   │   ├── InstallFragment.java           # Step 1: Auto-install
-│   │   │   ├── AgentSelectionFragment.java    # Agent selection
+│   │   │   ├── AgentSelectionFragment.java    # Step 2: Agent selection
 │   │   │   ├── AuthFragment.java              # Step 2: API key auth
 │   │   │   ├── ChannelFragment.java           # Step 3: Channel setup
 │   │   │   ├── ChannelSetupHelper.java        # Setup code parsing
-│   │   │   └── ProviderInfo.java              # AI provider metadata
+│   │   │   ├── ProviderInfo.java              # AI provider metadata
+│   │   │   ├── UpdateChecker.java             # App update checking
+│   │   │   └── PlaceholderFragment.java       # Empty placeholder
 │   │   └── com/termux/           # Termux core (terminal, services)
 │   ├── src/test/java/            # Unit tests
 │   └── src/main/cpp/             # Native code & bootstrap
+│       ├── Android.mk            # NDK build script
+│       ├── termux-bootstrap.c    # Bootstrap loader
+│       ├── termux-bootstrap-zip.S
 │       └── bootstrap-aarch64.zip # Linux environment packages
 ├── termux-shared/                # Shared library (published to JitPack)
 ├── terminal-emulator/            # Terminal emulation engine (JNI/C)
 ├── terminal-view/                # Terminal UI component
 ├── docs/                         # Design documentation
+│   └── design.md                 # Architecture design (Chinese)
 ├── art/                          # Assets & graphics
 └── gradle/                       # Gradle wrapper
 ```
@@ -90,7 +97,7 @@ terminal-emulator (library, publishable)
 ## Build Commands
 
 ### Prerequisites
-- Android SDK (API level 34+)
+- Android SDK (API level 36)
 - NDK r29+
 - JDK 17+
 
@@ -117,35 +124,54 @@ terminal-emulator (library, publishable)
 The build automatically downloads bootstrap packages from GitHub releases:
 - Source: `https://github.com/louzhixian/botdrop-packages/releases/latest/download/bootstrap-aarch64.zip`
 - Target: `app/src/main/cpp/bootstrap-aarch64.zip`
+- Size: ~130MB
+- Contains: Node.js, npm, bash, coreutils, termux-chroot (proot), OpenSSH
 
 ## Key Components
 
 ### 1. BotDropLauncherActivity
 Entry point that handles:
 - Guided permission requests (notifications, battery optimization)
-- State-based routing: checks bootstrap → OpenClaw install → config → dashboard
+- Two-phase startup: Welcome (permissions) → Loading (routing)
+- State-based routing: checks bootstrap → OpenClaw config → OpenClaw install → channel config → dashboard
 
 ### 2. SetupActivity
-3-step wizard (ViewPager2):
-- Step 1: Auto-install OpenClaw
-- Step 2: AI provider selection + API key input
-- Step 3: Channel setup (Telegram/Discord via @BotDropSetupBot)
+4-step wizard (ViewPager2):
+- Step 0: API Key (AuthFragment) - AI provider selection + API key input
+- Step 1: Agent Selection (AgentSelectionFragment) - Choose agent to install
+- Step 2: Install (InstallFragment) - Auto-install OpenClaw with progress
+- Step 3: Channel (ChannelFragment) - Telegram/Discord/Feishu setup
 
-### 3. BotDropService
+### 3. DashboardActivity
+Main status screen showing:
+- Gateway status (running/stopped) with indicator
+- Uptime display
+- Connected channels (Telegram, Discord, Feishu)
+- Control buttons (Start/Stop/Restart)
+- SSH connection info
+- Update notifications
+- Link to Terminal (advanced users)
+
+### 4. BotDropService
 Background service for:
 - Executing shell commands in Termux environment
 - OpenClaw installation (via install.sh script)
 - Gateway lifecycle management (start/stop/restart/status)
+- Command execution with 60s timeout (300s for install)
 
-### 4. BotDropConfig
+### 5. GatewayMonitorService
+Foreground service for keeping the OpenClaw gateway alive:
+- Persistent notification with status
+- Auto-restart on failure (max 5 attempts)
+- Partial wake lock for Doze mode handling
+- 30-second monitoring interval
+
+### 6. BotDropConfig
 Configuration management:
 - Reads/writes `~/.openclaw/openclaw.json`
 - Manages auth profiles in `~/.openclaw/agents/main/agent/auth-profiles.json`
-- Thread-safe file operations with synchronized locking
+- Thread-safe file operations with synchronized locking (`CONFIG_LOCK`)
 - Sets restrictive file permissions (owner-only access for API keys)
-
-### 5. GatewayMonitorService
-Foreground service for keeping the OpenClaw gateway alive with auto-restart.
 
 ## Configuration Files
 
@@ -189,9 +215,9 @@ Foreground service for keeping the OpenClaw gateway alive with auto-restart.
 ## Testing Strategy
 
 ### Unit Tests
-- Framework: JUnit 4 + Robolectric
-- Location: `app/src/test/java/`
-- Run: `./gradlew :app:testDebugUnitTest`
+- **Framework**: JUnit 4 + Robolectric
+- **Location**: `app/src/test/java/`
+- **Run**: `./gradlew :app:testDebugUnitTest`
 
 ### Key Test Files
 - `BotDropConfigTest.java`: Config I/O operations, JSON structure validation
@@ -200,8 +226,13 @@ Foreground service for keeping the OpenClaw gateway alive with auto-restart.
 
 ### Testing Notes
 - Tests use Robolectric for Android framework mocking
-- Some tests cannot fully test file I/O due to hardcoded Termux paths
+- Some tests cannot fully test file I/O due to hardcoded Termux paths (`/data/data/app.botdrop/files/home/`)
 - Tests verify graceful error handling when paths don't exist
+- Integration tests require actual device/emulator with Termux filesystem
+
+### Test Categories
+1. **Unit tests**: Data structures, static utilities, JSON validation
+2. **Integration tests**: Command execution, file I/O, gateway control (require device)
 
 ## Code Style Guidelines
 
@@ -211,6 +242,7 @@ Foreground service for keeping the OpenClaw gateway alive with auto-restart.
 - Add comments only where logic isn't self-evident
 - Use `final` keyword where appropriate
 - Synchronize access to shared resources (see `BotDropConfig.CONFIG_LOCK`)
+- Use try-with-resources for file operations to prevent resource leaks
 
 ## Security Considerations
 
@@ -218,6 +250,7 @@ Foreground service for keeping the OpenClaw gateway alive with auto-restart.
 - API keys stored in `auth-profiles.json` with owner-only permissions
 - `configFile.setReadable(false, false)` / `setReadable(true, true)`
 - Config directory: `~/.openclaw/` (private to app)
+- Never log API keys or sensitive credentials
 
 ### Sensitive Permissions
 The app requires several sensitive permissions:
@@ -225,6 +258,8 @@ The app requires several sensitive permissions:
 - `REQUEST_IGNORE_BATTERY_OPTIMIZATIONS`: Prevent system from killing service
 - `MANAGE_EXTERNAL_STORAGE`: Access files for AI workspace
 - `SYSTEM_ALERT_WINDOW`: Display over other apps (optional)
+- `INTERNET`, `ACCESS_NETWORK_STATE`: Network access
+- `WAKE_LOCK`: Keep CPU awake for gateway
 
 ### Security Policy
 - Report vulnerabilities privately (do not open public issues)
@@ -234,7 +269,7 @@ The app requires several sensitive permissions:
 
 ### Bootstrap Installation
 On first launch, `TermuxInstaller` extracts the bootstrap archive:
-- Contains: Node.js, npm, bash, coreutils, termux-chroot (proot)
+- Contains: Node.js, npm, bash, coreutils, termux-chroot (proot), OpenSSH
 - Location: `/data/data/app.botdrop/files/usr/`
 - Install script: `PREFIX/share/botdrop/install.sh`
 
@@ -244,12 +279,19 @@ Commands are executed via `ProcessBuilder` with Termux environment:
 pb.environment().put("PREFIX", TermuxConstants.TERMUX_PREFIX_DIR_PATH);
 pb.environment().put("HOME", TermuxConstants.TERMUX_HOME_DIR_PATH);
 pb.environment().put("PATH", TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH + ":" + System.getenv("PATH"));
+pb.environment().put("TMPDIR", TermuxConstants.TERMUX_TMP_PREFIX_DIR_PATH);
 ```
 
 ### termux-chroot Usage
 OpenClaw commands run under `termux-chroot` (proot) because:
 - Android kernel blocks `os.networkInterfaces()` which OpenClaw needs
 - proot provides a virtual chroot environment that bypasses this limitation
+
+### Gateway Process Management
+- PID file: `~/.openclaw/gateway.pid`
+- Log file: `~/.openclaw/gateway.log`
+- Debug log: `~/.openclaw/gateway-debug.log`
+- SSH server runs on port 8022 for remote access
 
 ## Development Workflow
 
@@ -284,6 +326,23 @@ Bootstrap contains the Linux environment. To update:
 - Ensure `mkdirs()` succeeded before writing
 - Check `setReadable/setWritable` permissions are set correctly
 
+### Gateway Not Starting
+- Check `~/.openclaw/gateway-debug.log` for shell trace
+- Verify termux-chroot is available
+- Check that openclaw binary exists and is executable
+
+## Publishing
+
+### JitPack Configuration
+- `jitpack.yml` specifies JDK 17 and NDK r29
+- Libraries published: termux-shared, terminal-emulator, terminal-view
+- Version: 0.118.0
+
+### Version Format
+- Follows Semantic Versioning 2.0.0
+- Format: `major.minor.patch(-prerelease)(+buildmetadata)`
+- Validated in `app/build.gradle` `validateVersionName()`
+
 ## License
 
 GPLv3 - See `LICENSE` file. Built on Termux (also GPLv3).
@@ -292,4 +351,4 @@ GPLv3 - See `LICENSE` file. Built on Termux (also GPLv3).
 
 - [Termux GitHub](https://github.com/termux/termux-app)
 - [OpenClaw GitHub](https://github.com/nicepkg/openclaw)
-- Design docs: `docs/design.md`
+- Design docs: `docs/design.md` (Chinese)
