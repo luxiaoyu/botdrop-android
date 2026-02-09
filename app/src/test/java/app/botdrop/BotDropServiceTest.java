@@ -165,7 +165,7 @@ public class BotDropServiceTest {
      */
     @Ignore("Requires integration test environment")
     @Test
-    public void testInstallOpenclaw_requiresIntegrationTest() {
+    public void testInstallOpenClaw_requiresIntegrationTest() {
         assertTrue("installOpenclaw requires process execution - see integration tests", true);
     }
 

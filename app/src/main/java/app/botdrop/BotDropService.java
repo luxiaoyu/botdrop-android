@@ -214,7 +214,7 @@ public class BotDropService extends Service {
      *   BOTDROP_ERROR:message         → callback.onError(message)
      *   BOTDROP_ALREADY_INSTALLED     → callback.onComplete()
      */
-    public void installOpenclaw(InstallProgressCallback callback) {
+    public void installOpenClaw(InstallProgressCallback callback) {
         final String INSTALL_SCRIPT = TermuxConstants.TERMUX_PREFIX_DIR_PATH + "/share/botdrop/install.sh";
 
         mExecutor.execute(() -> {

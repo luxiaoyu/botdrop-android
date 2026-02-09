@@ -90,11 +90,11 @@
     </LinearLayout>
 
     <!-- Divider -->
-    <View
-        android:layout_width="match_parent"
-        android:layout_height="1dp"
-        android:background="@color/botdrop_surface"
-        android:layout_marginBottom="12dp" />
+<!--    <View-->
+<!--        android:layout_width="match_parent"-->
+<!--        android:layout_height="1dp"-->
+<!--        android:background="@color/botdrop_surface"-->
+<!--        android:layout_marginBottom="12dp" />-->
 
     <!-- Agent 2: OwliaBot -->
     <LinearLayout
@@ -106,6 +106,7 @@
         android:layout_marginBottom="12dp"
         android:gravity="center_vertical"
         android:alpha="0.5"
+        android:visibility="gone"
         android:background="@drawable/botdrop_card_bg">
 
         <!-- Icon -->

@@ -175,7 +175,7 @@ public class InstallFragment extends Fragment {
 
         Logger.logInfo(LOG_TAG, "Starting OpenClaw installation");
 
-        mService.installOpenclaw(new BotDropService.InstallProgressCallback() {
+        mService.installOpenClaw(new BotDropService.InstallProgressCallback() {
             @Override
             public void onStepStart(int step, String message) {
                 updateStep(step, "●", message, false);
