@@ -464,14 +464,24 @@ public final class TermuxInstaller {
                 "rm -rf $PREFIX/lib/node_modules/openclaw 2>/dev/null\n" +
                 "NPM_OUTPUT=$(npm install -g openclaw@latest --ignore-scripts --force 2>&1)\n" +
                 "NPM_EXIT=$?\n" +
-                "if [ $NPM_EXIT -eq 0 ]; then\n" +
-                "    echo \"BOTDROP_STEP:2:DONE\"\n" +
-                "    touch \"$MARKER\"\n" +
-                "    echo \"BOTDROP_COMPLETE\"\n" +
-                "else\n" +
+                "if [ $NPM_EXIT -ne 0 ]; then\n" +
                 "    echo \"BOTDROP_ERROR:npm install failed (exit $NPM_EXIT): $NPM_OUTPUT\"\n" +
                 "    exit 1\n" +
-                "fi\n";
+                "fi\n" +
+                "echo \"BOTDROP_STEP:2:DONE\"\n\n" +
+                "echo \"BOTDROP_STEP:3:START:Installing image processing support\"\n" +
+                "# Install sharp-wasm32 for Android image processing support\n" +
+                "cd $PREFIX/lib/node_modules/openclaw\n" +
+                "SHARP_OUTPUT=$(npm install --force --cpu=wasm32 @img/sharp-wasm32 2>&1)\n" +
+                "SHARP_EXIT=$?\n" +
+                "if [ $SHARP_EXIT -eq 0 ]; then\n" +
+                "    echo \"BOTDROP_INFO:Image processing support installed\"\n" +
+                "else\n" +
+                "    echo \"BOTDROP_WARN:Failed to install image processing support (exit $SHARP_EXIT): $SHARP_OUTPUT\"\n" +
+                "fi\n" +
+                "echo \"BOTDROP_STEP:3:DONE\"\n" +
+                "touch \"$MARKER\"\n" +
+                "echo \"BOTDROP_COMPLETE\"\n";
 
             try (FileOutputStream fos = new FileOutputStream(installScript)) {
                 fos.write(installContent.getBytes());

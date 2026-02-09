@@ -273,6 +273,13 @@ On first launch, `TermuxInstaller` extracts the bootstrap archive:
 - Location: `/data/data/app.botdrop/files/usr/`
 - Install script: `PREFIX/share/botdrop/install.sh`
 
+### Image Processing Support
+OpenClaw uses `sharp` for image processing. On Android/Termux, the native `sharp` binary is not available, so we install the WebAssembly version:
+- Package: `@img/sharp-wasm32`
+- Installed by: `install.sh` step 3 (after OpenClaw installation)
+- Location: `$PREFIX/lib/node_modules/openclaw/node_modules/@img/sharp-wasm32`
+- This enables OpenClaw to view and process images sent via Telegram/Feishu/Discord
+
 ### Command Execution
 Commands are executed via `ProcessBuilder` with Termux environment:
 ```java

@@ -133,6 +133,34 @@
                 android:textColor="@color/botdrop_on_background" />
         </LinearLayout>
 
+        <!-- Step 3: Image Support -->
+        <LinearLayout
+            android:id="@+id/install_step_3"
+            android:layout_width="match_parent"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:paddingVertical="8dp">
+
+            <TextView
+                android:id="@+id/install_step_3_icon"
+                android:layout_width="24dp"
+                android:layout_height="24dp"
+                android:text="○"
+                android:textSize="18sp"
+                android:textColor="@color/botdrop_accent"
+                android:gravity="center"
+                android:layout_marginEnd="12dp" />
+
+            <TextView
+                android:id="@+id/install_step_3_text"
+                android:layout_width="0dp"
+                android:layout_height="wrap_content"
+                android:layout_weight="1"
+                android:text="Adding image support"
+                android:textSize="14sp"
+                android:textColor="@color/botdrop_on_background" />
+        </LinearLayout>
+
     </LinearLayout>
 
     <!-- Status message -->

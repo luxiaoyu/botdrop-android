@@ -37,6 +37,7 @@ public class InstallFragment extends Fragment {
     private TextView mStep0Icon, mStep0Text;
     private TextView mStep1Icon, mStep1Text;
     private TextView mStep2Icon, mStep2Text;
+    private TextView mStep3Icon, mStep3Text;
 
     private TextView mStatusMessage;
     private View mErrorContainer;
@@ -87,6 +88,8 @@ public class InstallFragment extends Fragment {
         mStep1Text = view.findViewById(R.id.install_step_1_text);
         mStep2Icon = view.findViewById(R.id.install_step_2_icon);
         mStep2Text = view.findViewById(R.id.install_step_2_text);
+        mStep3Icon = view.findViewById(R.id.install_step_3_icon);
+        mStep3Text = view.findViewById(R.id.install_step_3_text);
 
         mStatusMessage = view.findViewById(R.id.install_status_message);
         mErrorContainer = view.findViewById(R.id.install_error_container);
@@ -232,6 +235,10 @@ public class InstallFragment extends Fragment {
                 iconView = mStep2Icon;
                 textView = mStep2Text;
                 break;
+            case 3:
+                iconView = mStep3Icon;
+                textView = mStep3Text;
+                break;
         }
 
         if (iconView != null) {
@@ -253,6 +260,7 @@ public class InstallFragment extends Fragment {
         mStep0Icon.setText("○");
         mStep1Icon.setText("○");
         mStep2Icon.setText("○");
+        mStep3Icon.setText("○");
         mStatusMessage.setText("This takes about a minute");
         mInstallationStarted.set(false);
     }
