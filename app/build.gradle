@@ -156,8 +156,7 @@ android {
                 def abi = output.getFilter(com.android.build.OutputFile.ABI)
                 outputFileName = new File("botdrop-app_" + (apkVersionTag ? apkVersionTag : project.ext.packageVariant + "-" + "debug") + "_" + (abi ? abi : "universal") + ".apk")
             } else if (variant.buildType.name == "release") {
-                def abi = output.getFilter(com.android.build.OutputFile.ABI)
-                outputFileName = new File("botdrop-app_" + (apkVersionTag ? apkVersionTag : project.ext.packageVariant + "-" + "release") + "_" + (abi ? abi : "universal") + ".apk")
+                outputFileName = new File("botdrop-app-" + android.defaultConfig.versionName + ".apk")
             }
         }
     }
