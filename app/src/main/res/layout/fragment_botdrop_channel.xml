@@ -143,6 +143,7 @@
             android:background="@drawable/botdrop_input_bg"
             android:textColor="@color/botdrop_on_background"
             android:textColorHint="@color/botdrop_secondary_text"
+            android:textCursorDrawable="@drawable/botdrop_cursor"
             android:layout_marginBottom="16dp" />
 
         <!-- User ID -->
@@ -167,6 +168,7 @@
             android:background="@drawable/botdrop_input_bg"
             android:textColor="@color/botdrop_on_background"
             android:textColorHint="@color/botdrop_secondary_text"
+            android:textCursorDrawable="@drawable/botdrop_cursor"
             android:layout_marginBottom="24dp" />
 
         <!-- Connect Button -->
