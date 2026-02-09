@@ -6,8 +6,10 @@ import android.content.Intent;
 import android.content.ServiceConnection;
 import android.os.Bundle;
 import android.os.IBinder;
+import android.text.Html;
 import android.text.InputType;
 import android.text.TextUtils;
+import android.text.method.LinkMovementMethod;
 import android.view.LayoutInflater;
 import android.view.View;
 import android.view.ViewGroup;
@@ -41,7 +43,7 @@ public class AuthFragment extends Fragment {
     private LinearLayout mPopularProvidersContainer;
     private LinearLayout mMoreProvidersContainer;
     private TextView mMoreToggle;
-    
+
     // Auth input views (from fragment_botdrop_auth_input.xml)
     private View mAuthInputView;
     private TextView mBackButton;
@@ -55,15 +57,15 @@ public class AuthFragment extends Fragment {
     private LinearLayout mStatusContainer;
     private TextView mStatusText;
     private Button mVerifyButton;
-    
+
     private List<ProviderInfo> mPopularProviders;
     private List<ProviderInfo> mMoreProviders;
-    
+
     private ProviderInfo mSelectedProvider;
     private ProviderInfo.AuthMethod mSelectedAuthMethod;
     private boolean mMoreExpanded = false;
     private boolean mPasswordVisible = false;
-    
+
     // Keep track of all provider views for radio button management
     private List<View> mAllProviderViews = new ArrayList<>();
 
@@ -104,7 +106,7 @@ public class AuthFragment extends Fragment {
         // Inflate provider selection view
         mProviderSelectionView = inflater.inflate(R.layout.fragment_botdrop_auth, containerLayout, false);
         containerLayout.addView(mProviderSelectionView);
-        
+
         // Inflate auth input view
         mAuthInputView = inflater.inflate(R.layout.fragment_botdrop_auth_input, containerLayout, false);
         mAuthInputView.setVisibility(View.GONE);
@@ -112,6 +114,10 @@ public class AuthFragment extends Fragment {
 
         setupProviderSelectionView();
         setupAuthInputView();
+
+        // Auto-select kimi-coding provider and show auth input
+        // Must be called after both views are initialized
+        autoSelectKimiCoding();
 
         return containerLayout;
     }
@@ -192,6 +198,28 @@ public class AuthFragment extends Fragment {
         mMoreToggle.setOnClickListener(v -> toggleMoreProviders());
     }
 
+    /**
+     * Auto-select kimi-coding provider and directly show auth input view
+     * Skipping the provider selection step
+     */
+    private void autoSelectKimiCoding() {
+        // Find kimi-coding provider from popular providers
+        for (ProviderInfo provider : mPopularProviders) {
+            if ("kimi-coding".equals(provider.getId())) {
+                mSelectedProvider = provider;
+                Logger.logInfo(LOG_TAG, "Auto-selected provider: " + provider.getName());
+
+                // Directly show auth input without showing provider selection
+                mSelectedAuthMethod = provider.getAuthMethods().get(0);
+                mProviderSelectionView.setVisibility(View.GONE);
+                mAuthInputView.setVisibility(View.VISIBLE);
+                setupUIForAuthMethod();
+                return;
+            }
+        }
+        Logger.logError(LOG_TAG, "kimi-coding provider not found in popular providers");
+    }
+
     private void setupAuthInputView() {
         mBackButton = mAuthInputView.findViewById(R.id.auth_input_back);
         mTitle = mAuthInputView.findViewById(R.id.auth_input_title);
@@ -207,6 +235,7 @@ public class AuthFragment extends Fragment {
 
         // Set up back button
         mBackButton.setOnClickListener(v -> showProviderSelection());
+        mBackButton.setVisibility(View.GONE);
 
         // Set up visibility toggle
         mToggleVisibility.setOnClickListener(v -> togglePasswordVisibility());
@@ -229,7 +258,7 @@ public class AuthFragment extends Fragment {
 
         name.setText(provider.getName());
         description.setText(provider.getDescription());
-        
+
         if (provider.isRecommended()) {
             recommendedBadge.setVisibility(View.VISIBLE);
         } else {
@@ -244,7 +273,7 @@ public class AuthFragment extends Fragment {
 
     private void onProviderSelected(ProviderInfo provider, RadioButton selectedRadio) {
         Logger.logInfo(LOG_TAG, "Provider selected: " + provider.getName());
-        
+
         mSelectedProvider = provider;
 
         // Update all radio buttons
@@ -259,7 +288,7 @@ public class AuthFragment extends Fragment {
 
     private void toggleMoreProviders() {
         mMoreExpanded = !mMoreExpanded;
-        
+
         if (mMoreExpanded) {
             mMoreProvidersContainer.setVisibility(View.VISIBLE);
             mMoreToggle.setText("More providers ▲");
@@ -277,11 +306,11 @@ public class AuthFragment extends Fragment {
     private void showAuthInput(ProviderInfo provider) {
         // Use primary auth method (first in list)
         mSelectedAuthMethod = provider.getAuthMethods().get(0);
-        
+
         // Switch views
         mProviderSelectionView.setVisibility(View.GONE);
         mAuthInputView.setVisibility(View.VISIBLE);
-        
+
         // Configure UI for the selected auth method
         setupUIForAuthMethod();
     }
@@ -309,9 +338,10 @@ public class AuthFragment extends Fragment {
         mInputLabel.setText("API Key");
         mInputField.setHint("Paste your API key here");
         mInputField.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
-        
+
         String instructions = getAPIKeyInstructions(mSelectedProvider.getId());
-        mInstructions.setText(instructions);
+        mInstructions.setText(Html.fromHtml(instructions, Html.FROM_HTML_MODE_COMPACT));
+        mInstructions.setMovementMethod(LinkMovementMethod.getInstance());
 
         mInputFieldContainer.setVisibility(View.VISIBLE);
         mOAuthButton.setVisibility(View.GONE);
@@ -321,7 +351,7 @@ public class AuthFragment extends Fragment {
         mInputLabel.setText("Setup Token");
         mInputField.setHint("Paste your setup token here");
         mInputField.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
-        
+
         String instructions = "1. Open claude.ai/settings → \"Developer\" section\n" +
                              "2. Find or create a \"Setup Token\"\n" +
                              "3. Copy the token\n" +
@@ -362,6 +392,10 @@ public class AuthFragment extends Fragment {
                 return "1. Go to openrouter.ai\n" +
                        "2. Sign in and get your API key\n" +
                        "3. Copy and paste it below";
+            case "kimi-coding":
+                return "1. Go to <a href=\"https://www.kimi.com/code\">kimi-coding</a><br>" +
+                    "2. Sign in and get your API key<br>" +
+                    "3. Copy and paste it below";
             default:
                 return "1. Get your API key from " + mSelectedProvider.getName() + "\n" +
                        "2. Copy and paste it below";
@@ -370,22 +404,22 @@ public class AuthFragment extends Fragment {
 
     private void togglePasswordVisibility() {
         mPasswordVisible = !mPasswordVisible;
-        
+
         if (mPasswordVisible) {
             mInputField.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_VISIBLE_PASSWORD);
         } else {
             mInputField.setInputType(InputType.TYPE_CLASS_TEXT | InputType.TYPE_TEXT_VARIATION_PASSWORD);
         }
-        
+
         // Move cursor to end
         mInputField.setSelection(mInputField.getText().length());
     }
 
     private void handleOAuth() {
         Logger.logInfo(LOG_TAG, "OAuth requested for: " + mSelectedProvider.getId());
-        
+
         showStatus("OAuth flow not yet implemented.\n\nPlease use API Key method for now.", false);
-        
+
         // TODO: Implement OAuth via openclaw CLI
     }
 
