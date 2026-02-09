@@ -38,6 +38,8 @@ local.properties
 ehthumbs.db
 Thumbs.db
 keystore/
+*.jks
+*.keystore
 
 # Worktrees
 .worktrees/

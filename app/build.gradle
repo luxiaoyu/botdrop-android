@@ -2,6 +2,15 @@ plugins {
     id "com.android.application"
 }
 
+// Load signing config from local.properties (not tracked by git)
+def localProperties = new Properties()
+def localPropertiesFile = rootProject.file('local.properties')
+if (localPropertiesFile.exists()) {
+    localPropertiesFile.withInputStream { stream ->
+        localProperties.load(stream)
+    }
+}
+
 ext {
     // The packageVariant defines the bootstrap variant that will be included in the app APK.
     // This must be supported by com.termux.shared.termux.TermuxBootstrap.PackageVariant or app will
@@ -90,6 +99,12 @@ android {
             storePassword 'xrj45yWGLbsO7W0v'
             keyPassword 'xrj45yWGLbsO7W0v'
         }
+        release {
+            storeFile file(localProperties.getProperty('RELEASE_STORE_FILE', 'release-key.jks'))
+            keyAlias localProperties.getProperty('RELEASE_KEY_ALIAS', 'release')
+            storePassword localProperties.getProperty('RELEASE_STORE_PASSWORD', '')
+            keyPassword localProperties.getProperty('RELEASE_KEY_PASSWORD', '')
+        }
     }
 
     buildTypes {
@@ -97,6 +112,7 @@ android {
             minifyEnabled true
             shrinkResources false // Reproducible builds
             proguardFiles getDefaultProguardFile('proguard-android.txt'), 'proguard-rules.pro'
+            signingConfig signingConfigs.release
         }
 
         debug {
