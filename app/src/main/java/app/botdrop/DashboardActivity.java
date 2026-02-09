@@ -17,11 +17,8 @@ import android.view.View;
 import android.widget.Button;
 import android.widget.TextView;
 import android.widget.Toast;
-import android.Manifest;
-import android.content.pm.PackageManager;
 
 import androidx.annotation.Nullable;
-import androidx.core.app.ActivityCompat;
 import androidx.core.content.ContextCompat;
 
 import com.termux.R;
@@ -65,9 +62,6 @@ public class DashboardActivity extends Activity {
     private boolean mBound = false;
     private Handler mHandler = new Handler(Looper.getMainLooper());
     private Runnable mStatusRefreshRunnable;
-    private SmsCommandHandler mSmsCommandHandler;
-
-    private static final int REQUEST_CODE_SMS_PERMISSION = 2001;
 
     private ServiceConnection mConnection = new ServiceConnection() {
         @Override
@@ -135,12 +129,6 @@ public class DashboardActivity extends Activity {
         Intent intent = new Intent(this, BotDropService.class);
         bindService(intent, mConnection, Context.BIND_AUTO_CREATE);
 
-        // Check and request SMS permission
-        checkAndRequestSmsPermission();
-
-        // Start SMS command handler
-        startSmsCommandHandler();
-
         // Check for app updates
         UpdateChecker.check(this, (latestVersion, downloadUrl, notes) -> {
             mUpdateBannerText.setText("Update available: v" + latestVersion);
@@ -171,51 +159,6 @@ public class DashboardActivity extends Activity {
             unbindService(mConnection);
             mBound = false;
         }
-
-        // Stop SMS command handler
-        if (mSmsCommandHandler != null) {
-            mSmsCommandHandler.shutdown();
-            mSmsCommandHandler = null;
-        }
-    }
-
-    /**
-     * Check and request SMS permission
-     */
-    private void checkAndRequestSmsPermission() {
-        if (!SmsReader.hasSmsPermission(this)) {
-            Logger.logInfo(LOG_TAG, "Requesting SMS permission");
-            ActivityCompat.requestPermissions(this,
-                new String[]{Manifest.permission.READ_SMS, Manifest.permission.RECEIVE_SMS},
-                REQUEST_CODE_SMS_PERMISSION);
-        } else {
-            Logger.logInfo(LOG_TAG, "SMS permission already granted");
-        }
-    }
-
-    @Override
-    public void onRequestPermissionsResult(int requestCode, String[] permissions, int[] grantResults) {
-        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
-        if (requestCode == REQUEST_CODE_SMS_PERMISSION) {
-            if (grantResults.length > 0 && grantResults[0] == PackageManager.PERMISSION_GRANTED) {
-                Logger.logInfo(LOG_TAG, "SMS permission granted");
-                Toast.makeText(this, "SMS permission granted - BotDrop can now read SMS", Toast.LENGTH_SHORT).show();
-            } else {
-                Logger.logWarn(LOG_TAG, "SMS permission denied");
-                Toast.makeText(this, "SMS permission denied - some features may not work", Toast.LENGTH_LONG).show();
-            }
-        }
-    }
-
-    /**
-     * Start the SMS command handler to listen for OpenClaw SMS requests
-     */
-    private void startSmsCommandHandler() {
-        if (mSmsCommandHandler == null) {
-            mSmsCommandHandler = new SmsCommandHandler(this);
-        }
-        mSmsCommandHandler.start();
-        Logger.logInfo(LOG_TAG, "SMS command handler started");
     }
 
     /**
