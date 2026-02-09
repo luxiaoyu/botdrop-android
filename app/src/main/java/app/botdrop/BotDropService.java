@@ -38,7 +38,42 @@ public class BotDropService extends Service {
     @Override
     public IBinder onBind(Intent intent) {
         Logger.logDebug(LOG_TAG, "onBind");
+        installSmsTool();
         return mBinder;
+    }
+
+    /**
+     * Install the botdrop-sms helper script to the Termux bin directory
+     */
+    private void installSmsTool() {
+        mExecutor.execute(() -> {
+            try {
+                String scriptPath = TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH + "/botdrop-sms";
+                java.io.File scriptFile = new java.io.File(scriptPath);
+                
+                // Check if already installed and up to date
+                if (scriptFile.exists()) {
+                    return; // Already installed
+                }
+                
+                // Copy from assets
+                try (java.io.InputStream is = getAssets().open("botdrop-sms");
+                     java.io.FileOutputStream fos = new java.io.FileOutputStream(scriptFile)) {
+                    byte[] buffer = new byte[4096];
+                    int read;
+                    while ((read = is.read(buffer)) != -1) {
+                        fos.write(buffer, 0, read);
+                    }
+                }
+                
+                // Make executable
+                scriptFile.setExecutable(true, false);
+                Logger.logInfo(LOG_TAG, "botdrop-sms tool installed successfully");
+                
+            } catch (Exception e) {
+                Logger.logError(LOG_TAG, "Failed to install botdrop-sms tool: " + e.getMessage());
+            }
+        });
     }
 
     @Override
