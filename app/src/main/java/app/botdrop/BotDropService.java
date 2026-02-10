@@ -39,6 +39,10 @@ public class BotDropService extends Service {
     public IBinder onBind(Intent intent) {
         Logger.logDebug(LOG_TAG, "onBind");
         installSmsTool();
+        // Also try to install skill if openclaw is already installed
+        if (isOpenclawInstalled()) {
+            installSmsSkill();
+        }
         return mBinder;
     }
 
@@ -75,6 +79,64 @@ public class BotDropService extends Service {
                 Logger.logError(LOG_TAG, "Failed to install botdrop-sms tool: " + e.getMessage());
             }
         });
+    }
+
+    /**
+     * Install the botdrop-sms skill to OpenClaw skills directory.
+     * This should be called after OpenClaw is installed.
+     * Skill path: $PREFIX/lib/node_modules/openclaw/skills/botdrop-sms/SKILL.md
+     */
+    public void installSmsSkill() {
+        mExecutor.execute(() -> {
+            try {
+                String skillDir = TermuxConstants.TERMUX_PREFIX_DIR_PATH + "/lib/node_modules/openclaw/skills/botdrop-sms";
+                String skillPath = skillDir + "/SKILL.md";
+                
+                java.io.File skillDirFile = new java.io.File(skillDir);
+                java.io.File skillFile = new java.io.File(skillPath);
+
+                // Check if openclaw is installed
+                if (!isOpenclawInstalled()) {
+                    Logger.logWarn(LOG_TAG, "Cannot install SMS skill: OpenClaw not installed yet");
+                    return;
+                }
+
+                // Create skills directory if not exists
+                if (!skillDirFile.exists()) {
+                    if (!skillDirFile.mkdirs()) {
+                        Logger.logError(LOG_TAG, "Failed to create skill directory: " + skillDir);
+                        return;
+                    }
+                }
+
+                // Copy SKILL.md from assets
+                try (java.io.InputStream is = getAssets().open("botdrop-sms-skill/SKILL.md");
+                     java.io.FileOutputStream fos = new java.io.FileOutputStream(skillFile)) {
+                    byte[] buffer = new byte[4096];
+                    int read;
+                    while ((read = is.read(buffer)) != -1) {
+                        fos.write(buffer, 0, read);
+                    }
+                }
+
+                // Set readable permissions
+                skillFile.setReadable(true, false);
+                Logger.logInfo(LOG_TAG, "botdrop-sms skill installed successfully to " + skillPath);
+
+            } catch (java.io.FileNotFoundException e) {
+                Logger.logError(LOG_TAG, "SKILL.md not found in assets: " + e.getMessage());
+            } catch (Exception e) {
+                Logger.logError(LOG_TAG, "Failed to install botdrop-sms skill: " + e.getMessage());
+            }
+        });
+    }
+
+    /**
+     * Check if the botdrop-sms skill is installed
+     */
+    public static boolean isSmsSkillInstalled() {
+        String skillPath = TermuxConstants.TERMUX_PREFIX_DIR_PATH + "/lib/node_modules/openclaw/skills/botdrop-sms/SKILL.md";
+        return new java.io.File(skillPath).exists();
     }
 
     @Override
@@ -406,6 +468,18 @@ public class BotDropService extends Service {
     private static final String GATEWAY_LOG_FILE = TermuxConstants.TERMUX_HOME_DIR_PATH + "/.openclaw/gateway.log";
 
     public void startGateway(CommandCallback callback) {
+        // Ensure SMS skill is installed before starting gateway
+        if (!isSmsSkillInstalled()) {
+            Logger.logInfo(LOG_TAG, "SMS skill not installed, installing now...");
+            installSmsSkill();
+            // Wait a short moment for async installation to complete
+            try {
+                Thread.sleep(500);
+            } catch (InterruptedException e) {
+                Thread.currentThread().interrupt();
+            }
+        }
+
         String logDir = TermuxConstants.TERMUX_HOME_DIR_PATH + "/.openclaw";
         String debugLog = logDir + "/gateway-debug.log";
         String home = TermuxConstants.TERMUX_HOME_DIR_PATH;

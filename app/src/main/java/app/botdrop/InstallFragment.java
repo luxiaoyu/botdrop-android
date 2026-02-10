@@ -196,6 +196,11 @@ public class InstallFragment extends Fragment {
             public void onComplete() {
                 Logger.logInfo(LOG_TAG, "Installation complete");
 
+                // Install SMS skill now that OpenClaw is installed
+                if (mService != null) {
+                    mService.installSmsSkill();
+                }
+
                 // Get and display version
                 String version = BotDropService.getOpenclawVersion();
                 if (version != null) {
