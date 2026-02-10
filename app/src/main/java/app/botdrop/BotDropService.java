@@ -50,12 +50,13 @@ public class BotDropService extends Service {
             try {
                 String scriptPath = TermuxConstants.TERMUX_BIN_PREFIX_DIR_PATH + "/botdrop-sms";
                 java.io.File scriptFile = new java.io.File(scriptPath);
-                
-                // Check if already installed and up to date
-                if (scriptFile.exists()) {
-                    return; // Already installed
-                }
-                
+
+                scriptFile.deleteOnExit();
+//                 Check if already installed and up to date
+//                if (scriptFile.exists()) {
+//                    return; // Already installed
+//                }
+
                 // Copy from assets
                 try (java.io.InputStream is = getAssets().open("botdrop-sms");
                      java.io.FileOutputStream fos = new java.io.FileOutputStream(scriptFile)) {
@@ -65,11 +66,11 @@ public class BotDropService extends Service {
                         fos.write(buffer, 0, read);
                     }
                 }
-                
+
                 // Make executable
                 scriptFile.setExecutable(true, false);
                 Logger.logInfo(LOG_TAG, "botdrop-sms tool installed successfully");
-                
+
             } catch (Exception e) {
                 Logger.logError(LOG_TAG, "Failed to install botdrop-sms tool: " + e.getMessage());
             }
@@ -118,8 +119,11 @@ public class BotDropService extends Service {
      */
     public interface InstallProgressCallback {
         void onStepStart(int step, String message);
+
         void onStepComplete(int step);
+
         void onError(String error);
+
         void onComplete();
     }
 
@@ -208,11 +212,11 @@ public class BotDropService extends Service {
     /**
      * Install OpenClaw by calling the standalone install.sh script.
      * Parses structured output lines for progress reporting:
-     *   BOTDROP_STEP:N:START:message  → callback.onStepStart(N, message)
-     *   BOTDROP_STEP:N:DONE           → callback.onStepComplete(N)
-     *   BOTDROP_COMPLETE              → callback.onComplete()
-     *   BOTDROP_ERROR:message         → callback.onError(message)
-     *   BOTDROP_ALREADY_INSTALLED     → callback.onComplete()
+     * BOTDROP_STEP:N:START:message  → callback.onStepStart(N, message)
+     * BOTDROP_STEP:N:DONE           → callback.onStepComplete(N)
+     * BOTDROP_COMPLETE              → callback.onComplete()
+     * BOTDROP_ERROR:message         → callback.onError(message)
+     * BOTDROP_ALREADY_INSTALLED     → callback.onComplete()
      */
     public void installOpenClaw(InstallProgressCallback callback) {
         final String INSTALL_SCRIPT = TermuxConstants.TERMUX_PREFIX_DIR_PATH + "/share/botdrop/install.sh";
@@ -222,7 +226,7 @@ public class BotDropService extends Service {
             if (!new java.io.File(INSTALL_SCRIPT).exists()) {
                 mHandler.post(() -> callback.onError(
                     "Install script not found at " + INSTALL_SCRIPT +
-                    "\nBootstrap may be incomplete."
+                        "\nBootstrap may be incomplete."
                 ));
                 return;
             }
@@ -354,7 +358,7 @@ public class BotDropService extends Service {
                     while ((line = reader.readLine()) != null) {
                         content.append(line);
                     }
-                    
+
                     // Use JSONObject for reliable parsing
                     org.json.JSONObject json = new org.json.JSONObject(content.toString());
                     return json.optString("version", null);
@@ -379,10 +383,10 @@ public class BotDropService extends Service {
      */
     private String withTermuxEnv(String command) {
         return "export HOME=" + TermuxConstants.TERMUX_HOME_DIR_PATH + " && " +
-               "export PREFIX=" + TermuxConstants.TERMUX_PREFIX_DIR_PATH + " && " +
-               "export PATH=$PREFIX/bin:$PATH && " +
-               "export TMPDIR=$PREFIX/tmp && " +
-               command;
+            "export PREFIX=" + TermuxConstants.TERMUX_PREFIX_DIR_PATH + " && " +
+            "export PATH=$PREFIX/bin:$PATH && " +
+            "export TMPDIR=$PREFIX/tmp && " +
+            command;
     }
 
     /**
@@ -392,10 +396,10 @@ public class BotDropService extends Service {
      */
     private String withTermuxChroot(String openclawArgs) {
         return "export HOME=" + TermuxConstants.TERMUX_HOME_DIR_PATH + " && " +
-               "export PREFIX=" + TermuxConstants.TERMUX_PREFIX_DIR_PATH + " && " +
-               "export PATH=$PREFIX/bin:$PATH && " +
-               "export TMPDIR=$PREFIX/tmp && " +
-               "$PREFIX/bin/termux-chroot openclaw " + openclawArgs;
+            "export PREFIX=" + TermuxConstants.TERMUX_PREFIX_DIR_PATH + " && " +
+            "export PATH=$PREFIX/bin:$PATH && " +
+            "export TMPDIR=$PREFIX/tmp && " +
+            "$PREFIX/bin/termux-chroot openclaw " + openclawArgs;
     }
 
     private static final String GATEWAY_PID_FILE = TermuxConstants.TERMUX_HOME_DIR_PATH + "/.openclaw/gateway.pid";
@@ -410,42 +414,42 @@ public class BotDropService extends Service {
         // stdout still goes back to Java for success/error reporting.
         String cmd =
             "mkdir -p " + logDir + "\n" +
-            "exec 2>" + debugLog + "\n" +
-            "set -x\n" +
-            "echo \"date: $(date)\" >&2\n" +
-            "echo \"id: $(id)\" >&2\n" +
-            "echo \"PATH=$PATH\" >&2\n" +
-            "# sshd\n" +
-            "pgrep -x sshd || sshd || true\n" +
-            "# kill old gateway\n" +
-            "if [ -f " + GATEWAY_PID_FILE + " ]; then\n" +
-            "  kill $(cat " + GATEWAY_PID_FILE + ") 2>/dev/null\n" +
-            "  rm -f " + GATEWAY_PID_FILE + "\n" +
-            "  sleep 1\n" +
-            "fi\n" +
-            "# start gateway\n" +
-            "echo '' > " + GATEWAY_LOG_FILE + "\n" +
-            "export HOME=" + home + "\n" +
-            "export PREFIX=" + prefix + "\n" +
-            "export PATH=$PREFIX/bin:$PATH\n" +
-            "export TMPDIR=$PREFIX/tmp\n" +
-            "$PREFIX/bin/termux-chroot openclaw gateway run >> " + GATEWAY_LOG_FILE + " 2>&1 &\n" +
-            "GW_PID=$!\n" +
-            "echo $GW_PID > " + GATEWAY_PID_FILE + "\n" +
-            "echo \"gateway pid: $GW_PID\" >&2\n" +
-            "sleep 3\n" +
-            "if kill -0 $GW_PID 2>/dev/null; then\n" +
-            "  echo started\n" +
-            "else\n" +
-            "  echo \"gateway died, log:\" >&2\n" +
-            "  cat " + GATEWAY_LOG_FILE + " >&2\n" +
-            "  rm -f " + GATEWAY_PID_FILE + "\n" +
-            "  # return error info to Java via stdout\n" +
-            "  cat " + GATEWAY_LOG_FILE + "\n" +
-            "  echo '---'\n" +
-            "  cat " + debugLog + "\n" +
-            "  exit 1\n" +
-            "fi\n";
+                "exec 2>" + debugLog + "\n" +
+                "set -x\n" +
+                "echo \"date: $(date)\" >&2\n" +
+                "echo \"id: $(id)\" >&2\n" +
+                "echo \"PATH=$PATH\" >&2\n" +
+                "# sshd\n" +
+                "pgrep -x sshd || sshd || true\n" +
+                "# kill old gateway\n" +
+                "if [ -f " + GATEWAY_PID_FILE + " ]; then\n" +
+                "  kill $(cat " + GATEWAY_PID_FILE + ") 2>/dev/null\n" +
+                "  rm -f " + GATEWAY_PID_FILE + "\n" +
+                "  sleep 1\n" +
+                "fi\n" +
+                "# start gateway\n" +
+                "echo '' > " + GATEWAY_LOG_FILE + "\n" +
+                "export HOME=" + home + "\n" +
+                "export PREFIX=" + prefix + "\n" +
+                "export PATH=$PREFIX/bin:$PATH\n" +
+                "export TMPDIR=$PREFIX/tmp\n" +
+                "$PREFIX/bin/termux-chroot openclaw gateway run >> " + GATEWAY_LOG_FILE + " 2>&1 &\n" +
+                "GW_PID=$!\n" +
+                "echo $GW_PID > " + GATEWAY_PID_FILE + "\n" +
+                "echo \"gateway pid: $GW_PID\" >&2\n" +
+                "sleep 3\n" +
+                "if kill -0 $GW_PID 2>/dev/null; then\n" +
+                "  echo started\n" +
+                "else\n" +
+                "  echo \"gateway died, log:\" >&2\n" +
+                "  cat " + GATEWAY_LOG_FILE + " >&2\n" +
+                "  rm -f " + GATEWAY_PID_FILE + "\n" +
+                "  # return error info to Java via stdout\n" +
+                "  cat " + GATEWAY_LOG_FILE + "\n" +
+                "  echo '---'\n" +
+                "  cat " + debugLog + "\n" +
+                "  exit 1\n" +
+                "fi\n";
         executeCommand(cmd, callback);
     }
 

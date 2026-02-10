@@ -14,23 +14,27 @@
   "model": "anthropic/claude-sonnet-4-5",
   
   "systemPrompt": {
-    "base": "You are a helpful AI assistant running on the user's Android device through BotDrop. You can help the user with various tasks including reading their SMS messages when requested. Always be respectful of the user's privacy and only access SMS when explicitly asked."
+    "base": "You are a helpful AI assistant running on the user's Android device through BotDrop. You can help the user with various tasks including reading and searching their SMS messages. Always be respectful of the user's privacy."
   },
   
   "tools": {
     "sms": {
       "type": "exec",
       "command": "botdrop-sms",
-      "description": "Read SMS messages from the Android device",
+      "description": "Read and search SMS messages from the Android device. Supports filtering by keyword.",
       "parameters": {
         "action": {
           "type": "string",
-          "enum": ["latest", "recent", "unread", "check"],
+          "enum": ["latest", "recent", "unread", "check", "search"],
           "required": true
         },
         "limit": {
           "type": "number",
-          "description": "Number of messages for 'recent' action"
+          "description": "Number of messages for 'recent' or 'search' action"
+        },
+        "keyword": {
+          "type": "string",
+          "description": "Search keyword for filtering messages (used with 'search' or 'recent' action)"
         }
       }
     }
@@ -62,7 +66,7 @@
     "sms": {
       "type": "exec",
       "command": "botdrop-sms",
-      "description": "Read SMS messages. Use when: user asks about verification codes, messages, texts, OTP, SMS notifications",
+      "description": "Read and search SMS messages. Use when: user asks about verification codes, messages, texts, OTP, SMS notifications, or wants to search SMS by keyword",
       "autoUse": {
         "patterns": [
           "verification code",
@@ -71,7 +75,9 @@
           "短信",
           "what.*text",
           "new message",
-          "check.*sms"
+          "check.*sms",
+          "search.*sms",
+          "查找.*短信"
         ]
       }
     }
@@ -179,6 +185,50 @@
 
 2. **顺丰速运** - 今天 16:45
    📦 您的快递已到达 [XX小区驿站]，取件码：8-2-9012
+```
+
+### 示例 4：关键字搜索
+
+**用户**: "帮我找一下顺丰的快递短信"
+
+**AI 行为**:
+1. 调用 `botdrop-sms search 顺丰`
+2. 筛选匹配的短信
+3. 按时间排序展示
+
+**AI 回复**:
+```
+找到 **3 条**包含"顺丰"的短信：
+
+1. **顺丰速运** - 今天 16:45
+   📦 您的快递已到达 [XX小区驿站]，取件码：8-2-9012
+
+2. **顺丰速运** - 昨天 09:30
+   📦 您的包裹 SF1234567890 已签收
+
+3. **顺丰速运** - 2025-09-27 17:02
+   💉 医院提醒：明天宝贝该打狂犬疫苗了
+```
+
+### 示例 5：搜索验证码
+
+**用户**: "最近有没有收到验证码？"
+
+**AI 行为**:
+1. 调用 `botdrop-sms search 验证码`
+2. 查找包含"验证码"的短信
+
+**AI 回复**:
+```
+找到 **2 条**验证码短信：
+
+1. **中信银行** (955581101) - 今天 12:17
+   🔐 验证码：**649922**
+   用途：向尾号4232账户转账 10000.00元
+
+2. **中信银行** (955581101) - 2025-09-11 08:26
+   🔐 验证码：**611165**
+   用途：向尾号4232账户转账 12000.00元
 ```
 
 ## 故障排除指南

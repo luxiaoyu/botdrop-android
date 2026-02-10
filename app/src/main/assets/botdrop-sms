@@ -4,17 +4,23 @@
 # Helper script for OpenClaw to read SMS messages from Android
 # 
 # Usage:
-#   botdrop-sms latest          - Get the latest SMS message
-#   botdrop-sms recent [n]      - Get n recent messages (default: 5)
-#   botdrop-sms unread          - Get all unread messages
-#   botdrop-sms check           - Check if SMS permission is granted
+#   botdrop-sms latest              - Get the latest SMS message
+#   botdrop-sms recent [n]          - Get n recent messages (default: 5)
+#   botdrop-sms search <keyword>    - Search messages by keyword
+#   botdrop-sms unread              - Get all unread messages
+#   botdrop-sms check               - Check if SMS permission is granted
 #
 
 set -e
 
-REQUEST_FILE="$HOME/.openclaw/sms_request.json"
-RESPONSE_FILE="$HOME/.openclaw/sms_response.json"
+SMS_DIR="$HOME/.openclaw/sms"
+REQUEST_FILE="$SMS_DIR/sms_request.json"
+RESPONSE_PREFIX="sms_response_"
+RESPONSE_SUFFIX=".json"
 TIMEOUT=10
+
+# Timestamp for this request
+REQUEST_TIMESTAMP=""
 
 # Colors for output
 RED='\033[0;31m'
@@ -31,6 +37,7 @@ Usage: botdrop-sms <command> [options]
 Commands:
   latest              Get the most recent SMS message
   recent [n]          Get n recent messages (default: 5)
+  search <keyword>    Search SMS messages by keyword
   unread              Get all unread SMS messages
   check               Check if SMS permission is granted
   help                Show this help message
@@ -38,23 +45,41 @@ Commands:
 Examples:
   botdrop-sms latest
   botdrop-sms recent 10
+  botdrop-sms search 验证码
   botdrop-sms unread
 
 Note: This requires the BotDrop app to be running with SMS permission granted.
 EOF
 }
 
+# Cleanup function to remove request and response files
+cleanup() {
+#    local timestamp="$1"
+#    rm -f "$REQUEST_FILE"
+#    if [ -n "$timestamp" ]; then
+#        rm -f "$SMS_DIR/${RESPONSE_PREFIX}${timestamp}.json"
+#    fi
+}
+
 # Create request file
 create_request() {
     local action="$1"
     local limit="${2:-10}"
+    local keyword="${3:-}"
     
-    mkdir -p "$HOME/.openclaw"
+    mkdir -p "$SMS_DIR"
     
-    if [ "$action" = "get_recent" ]; then
-        echo '{"action":"'$action'","limit":'$limit'}' > "$REQUEST_FILE"
+    # Generate timestamp (milliseconds since epoch)
+    REQUEST_TIMESTAMP=$(date +%s%3N)
+    
+    if [ "$action" = "search" ] && [ -n "$keyword" ]; then
+        # URL-encode or escape the keyword for JSON (basic escaping)
+        local escaped_keyword=$(echo "$keyword" | sed 's/"/\\"/g' | sed 's/\\/\\\\/g')
+        echo '{"action":"search","keyword":"'$escaped_keyword'","limit":'$limit',"timestamp":"'$REQUEST_TIMESTAMP'"}' > "$REQUEST_FILE"
+    elif [ "$action" = "get_recent" ]; then
+        echo '{"action":"'$action'","limit":'$limit',"timestamp":"'$REQUEST_TIMESTAMP'"}' > "$REQUEST_FILE"
     else
-        echo '{"action":"'$action'"}' > "$REQUEST_FILE"
+        echo '{"action":"'$action'","timestamp":"'$REQUEST_TIMESTAMP'"}' > "$REQUEST_FILE"
     fi
     
     # Set permissions so Android can read
@@ -63,18 +88,22 @@ create_request() {
 
 # Wait for and read response
 wait_for_response() {
+    local timestamp="$1"
     local waited=0
+    local response_file="$SMS_DIR/${RESPONSE_PREFIX}${timestamp}.json"
     
     while [ $waited -lt $TIMEOUT ]; do
-        if [ -f "$RESPONSE_FILE" ]; then
-            cat "$RESPONSE_FILE"
-            rm -f "$RESPONSE_FILE"
+        if [ -f "$response_file" ]; then
+            cat "$response_file"
+            cleanup "$timestamp"
             return 0
         fi
         sleep 0.5
         waited=$((waited + 1))
     done
     
+    # Timeout - cleanup and return error
+    cleanup "$timestamp"
     echo '{"error":"Timeout waiting for response. Is BotDrop running?"}'
     return 1
 }
@@ -91,7 +120,7 @@ case "${1:-help}" in
     latest)
         check_environment
         create_request "get_latest"
-        wait_for_response | jq . 2>/dev/null || wait_for_response
+        wait_for_response "$REQUEST_TIMESTAMP" | jq . 2>/dev/null || wait_for_response "$REQUEST_TIMESTAMP"
         ;;
     
     recent)
@@ -102,18 +131,31 @@ case "${1:-help}" in
             exit 1
         fi
         create_request "get_recent" "$limit"
-        wait_for_response | jq . 2>/dev/null || wait_for_response
+        wait_for_response "$REQUEST_TIMESTAMP" | jq . 2>/dev/null || wait_for_response "$REQUEST_TIMESTAMP"
+        ;;
+    
+    search)
+        check_environment
+        keyword="${2:-}"
+        if [ -z "$keyword" ]; then
+            echo -e "${RED}Error: Search keyword is required${NC}"
+            echo "Usage: botdrop-sms search <keyword>"
+            exit 1
+        fi
+        # Default to searching up to 100 messages for keyword matches, return up to 20
+        create_request "search" 20 "$keyword"
+        wait_for_response "$REQUEST_TIMESTAMP" | jq . 2>/dev/null || wait_for_response "$REQUEST_TIMESTAMP"
         ;;
     
     unread)
         check_environment
         create_request "get_unread"
-        wait_for_response | jq . 2>/dev/null || wait_for_response
+        wait_for_response "$REQUEST_TIMESTAMP" | jq . 2>/dev/null || wait_for_response "$REQUEST_TIMESTAMP"
         ;;
     
     check)
         create_request "check_permission"
-        wait_for_response | jq . 2>/dev/null || wait_for_response
+        wait_for_response "$REQUEST_TIMESTAMP" | jq . 2>/dev/null || wait_for_response "$REQUEST_TIMESTAMP"
         ;;
     
     help|--help|-h)

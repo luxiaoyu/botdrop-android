@@ -122,6 +122,17 @@ public class SmsReader {
      * @return Array of SMS messages, ordered by date (newest first)
      */
     public static SmsMessage[] getRecentSms(Context context, int limit) {
+        return getRecentSms(context, limit, null);
+    }
+
+    /**
+     * Get recent SMS messages with optional keyword filter
+     * @param context Application context
+     * @param limit Maximum number of messages to return
+     * @param keyword Optional keyword to filter messages (null or empty to disable filtering)
+     * @return Array of SMS messages, ordered by date (newest first)
+     */
+    public static SmsMessage[] getRecentSms(Context context, int limit, String keyword) {
         if (!hasSmsPermission(context)) {
             Logger.logError(LOG_TAG, "No SMS permission granted");
             return new SmsMessage[0];
@@ -137,14 +148,25 @@ public class SmsReader {
             Telephony.Sms.TYPE
         };
 
-        String sortOrder = Telephony.Sms.DATE + " DESC LIMIT " + limit;
+        String sortOrder = Telephony.Sms.DATE + " DESC";
+        boolean hasKeywordFilter = keyword != null && !keyword.trim().isEmpty();
+        String filterKeyword = hasKeywordFilter ? keyword.trim().toLowerCase() : null;
 
         java.util.List<SmsMessage> messages = new java.util.ArrayList<>();
 
         try (Cursor cursor = cr.query(SMS_ALL_URI, projection, null, null, sortOrder)) {
             if (cursor != null) {
-                while (cursor.moveToNext()) {
-                    messages.add(extractMessageFromCursor(cursor));
+                while (cursor.moveToNext() && messages.size() < limit) {
+                    SmsMessage msg = extractMessageFromCursor(cursor);
+                    // Apply keyword filter if specified
+                    if (hasKeywordFilter) {
+                        String bodyLower = msg.body != null ? msg.body.toLowerCase() : "";
+                        String senderLower = msg.address != null ? msg.address.toLowerCase() : "";
+                        if (!bodyLower.contains(filterKeyword) && !senderLower.contains(filterKeyword)) {
+                            continue; // Skip messages that don't match the keyword
+                        }
+                    }
+                    messages.add(msg);
                 }
             }
         } catch (Exception e) {
@@ -220,8 +242,19 @@ public class SmsReader {
      * @return JSON array string of messages
      */
     public static String getRecentSmsJson(Context context, int limit) {
+        return getRecentSmsJson(context, limit, null);
+    }
+
+    /**
+     * Get recent SMS messages as JSON array string with optional keyword filter
+     * @param context Application context
+     * @param limit Maximum number of messages
+     * @param keyword Optional keyword to filter messages
+     * @return JSON array string of messages
+     */
+    public static String getRecentSmsJson(Context context, int limit, String keyword) {
         try {
-            SmsMessage[] messages = getRecentSms(context, limit);
+            SmsMessage[] messages = getRecentSms(context, limit, keyword);
             JSONArray array = new JSONArray();
             for (SmsMessage msg : messages) {
                 array.put(msg.toJson());
@@ -229,6 +262,9 @@ public class SmsReader {
             
             JSONObject result = new JSONObject();
             result.put("count", messages.length);
+            if (keyword != null && !keyword.isEmpty()) {
+                result.put("filter_keyword", keyword);
+            }
             result.put("messages", array);
             return result.toString();
         } catch (JSONException e) {

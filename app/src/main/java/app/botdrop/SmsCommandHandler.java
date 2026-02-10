@@ -20,21 +20,24 @@ import java.util.concurrent.TimeUnit;
  * Handles SMS-related commands from OpenClaw via file-based IPC.
  * <p>
  * Communication protocol:
- * - OpenClaw writes request to: ~/.openclaw/sms_request.json
- * Format: {"action": "get_latest" | "get_recent" | "get_unread", "limit": number}
- * - Android reads request, processes it, writes response to: ~/.openclaw/sms_response.json
- * - OpenClaw polls for response file and reads it
+ * - OpenClaw writes request to: ~/.openclaw/sms/sms_request.json
+ *   Format: {"action": "get_latest" | "get_recent" | "get_unread" | "search", "limit": number, "keyword": "search_term", "timestamp": "ms_since_epoch"}
+ * - Android reads request, processes it, writes response to: ~/.openclaw/sms/sms_response_{timestamp}.json
+ * - OpenClaw polls for response file (with matching timestamp) and reads it
  * <p>
  * Supported actions:
  * - get_latest: Returns the most recent SMS message
  * - get_recent: Returns recent SMS messages (limit parameter required)
  * - get_unread: Returns all unread SMS messages
+ * - search: Search SMS messages by keyword (keyword parameter required)
  */
 public class SmsCommandHandler {
 
     private static final String LOG_TAG = "SmsCommandHandler";
-    private static final String REQUEST_FILE = TermuxConstants.TERMUX_HOME_DIR_PATH + "/.openclaw/sms_request.json";
-    private static final String RESPONSE_FILE = TermuxConstants.TERMUX_HOME_DIR_PATH + "/.openclaw/sms_response.json";
+    private static final String SMS_DIR = TermuxConstants.TERMUX_HOME_DIR_PATH + "/.openclaw/sms";
+    private static final String REQUEST_FILE = SMS_DIR + "/sms_request.json";
+    private static final String RESPONSE_PREFIX = "sms_response_";
+    private static final String RESPONSE_SUFFIX = ".json";
 
     private static final long POLL_INTERVAL_MS = 1000; // Check every second
     private static final long RESPONSE_TIMEOUT_MS = 30000; // 30 second timeout for responses
@@ -116,6 +119,7 @@ public class SmsCommandHandler {
 
         Logger.logInfo(LOG_TAG, "New SMS request detected");
 
+        String timestamp = null;
         try {
             // Read request
             String requestJson = readFile(requestFile);
@@ -129,8 +133,10 @@ public class SmsCommandHandler {
             JSONObject request = new JSONObject(requestJson);
             String action = request.optString("action", "");
             int limit = request.optInt("limit", 10);
+            String keyword = request.optString("keyword", "");
+            timestamp = request.optString("timestamp", "");
 
-            Logger.logInfo(LOG_TAG, "Processing SMS action: " + action);
+            Logger.logInfo(LOG_TAG, "Processing SMS action: " + action + ", keyword: " + keyword + ", timestamp: " + timestamp);
 
             // Process based on action
             String responseJson;
@@ -139,7 +145,17 @@ public class SmsCommandHandler {
                     responseJson = SmsReader.getLatestSmsJson(mContext);
                     break;
                 case "get_recent":
-                    responseJson = SmsReader.getRecentSmsJson(mContext, limit);
+                    responseJson = SmsReader.getRecentSmsJson(mContext, limit, keyword);
+                    break;
+                case "search":
+                    if (keyword == null || keyword.isEmpty()) {
+                        JSONObject error = new JSONObject();
+                        error.put("error", "Missing required 'keyword' parameter for search action");
+                        responseJson = error.toString();
+                    } else {
+                        // Search scans more messages but applies keyword filter
+                        responseJson = SmsReader.getRecentSmsJson(mContext, Math.max(limit, 100), keyword);
+                    }
                     break;
                 case "get_unread":
                     responseJson = SmsReader.getUnreadSmsJson(mContext);
@@ -150,12 +166,12 @@ public class SmsCommandHandler {
                 default:
                     JSONObject error = new JSONObject();
                     error.put("error", "Unknown action: " + action);
-                    error.put("supported_actions", new String[]{"get_latest", "get_recent", "get_unread", "check_permission"});
+                    error.put("supported_actions", new String[]{"get_latest", "get_recent", "get_unread", "check_permission", "search"});
                     responseJson = error.toString();
             }
 
-            // Write response
-            writeResponse(responseJson);
+            // Write response with timestamp in filename
+            writeResponse(responseJson, timestamp);
 
             // Mark as processed
             mLastProcessedRequest = requestFile;
@@ -169,7 +185,7 @@ public class SmsCommandHandler {
             try {
                 JSONObject error = new JSONObject();
                 error.put("error", "Failed to process request: " + e.getMessage());
-                writeResponse(error.toString());
+                writeResponse(error.toString(), timestamp);
             } catch (Exception ignored) {
             }
         }
@@ -186,8 +202,17 @@ public class SmsCommandHandler {
         return result.toString();
     }
 
-    private void writeResponse(String json) throws Exception {
-        File responseFile = new File(RESPONSE_FILE);
+    private void writeResponse(String json, String timestamp) throws Exception {
+        // Generate filename with timestamp if provided, otherwise use current time
+        String filename;
+        if (timestamp != null && !timestamp.isEmpty()) {
+            filename = RESPONSE_PREFIX + timestamp + RESPONSE_SUFFIX;
+        } else {
+            filename = RESPONSE_PREFIX + System.currentTimeMillis() + RESPONSE_SUFFIX;
+        }
+        
+        File responseFile = new File(SMS_DIR, filename);
+
         File parentDir = responseFile.getParentFile();
         if (parentDir != null && !parentDir.exists()) {
             parentDir.mkdirs();
@@ -200,7 +225,7 @@ public class SmsCommandHandler {
         // Set file permissions to be readable by termux user
         responseFile.setReadable(true, false);
 
-        Logger.logInfo(LOG_TAG, "SMS response written to " + RESPONSE_FILE + ": " + json);
+        Logger.logInfo(LOG_TAG, "SMS response written to " + responseFile.getAbsolutePath());
     }
 
     private String readFile(File file) throws Exception {
@@ -225,8 +250,12 @@ public class SmsCommandHandler {
                 parentDir.mkdirs();
             }
 
+            // Generate timestamp
+            String timestamp = String.valueOf(System.currentTimeMillis());
+
             JSONObject request = new JSONObject();
             request.put("action", action);
+            request.put("timestamp", timestamp);
             if (limit > 0) {
                 request.put("limit", limit);
             }
@@ -244,11 +273,20 @@ public class SmsCommandHandler {
     }
 
     /**
-     * Static helper to read response from OpenClaw side
+     * Static helper to read response from OpenClaw side.
+     * Reads the response file matching the given timestamp and deletes it after reading.
+     * 
+     * @param timestamp The timestamp from the request to match the response file
      */
-    public static String readResponse() {
+    public static String readResponse(String timestamp) {
         try {
-            File responseFile = new File(RESPONSE_FILE);
+            if (timestamp == null || timestamp.isEmpty()) {
+                return null;
+            }
+            
+            String filename = RESPONSE_PREFIX + timestamp + RESPONSE_SUFFIX;
+            File responseFile = new File(SMS_DIR, filename);
+            
             if (!responseFile.exists()) {
                 return null;
             }
@@ -260,8 +298,9 @@ public class SmsCommandHandler {
                 }
             }
 
-            // Delete response file after reading
-            responseFile.delete();
+//            // Delete response file after reading
+//            responseFile.delete();
+            Logger.logError(LOG_TAG, "response: " + content.toString());
 
             return content.toString();
         } catch (Exception e) {
@@ -272,11 +311,14 @@ public class SmsCommandHandler {
 
     /**
      * Wait for and read response with timeout
+     * 
+     * @param timeoutMs Timeout in milliseconds
+     * @param timestamp The timestamp from the request to match the response file
      */
-    public static String waitForResponse(long timeoutMs) {
+    public static String waitForResponse(long timeoutMs, String timestamp) {
         long startTime = System.currentTimeMillis();
         while (System.currentTimeMillis() - startTime < timeoutMs) {
-            String response = readResponse();
+            String response = readResponse(timestamp);
             if (response != null) {
                 return response;
             }
@@ -286,6 +328,24 @@ public class SmsCommandHandler {
                 break;
             }
         }
+        return null;
+    }
+
+    /**
+     * Legacy method for backward compatibility - reads most recent response file
+     * @deprecated Use {@link #readResponse(String)} instead
+     */
+    @Deprecated
+    public static String readResponse() {
+        return null;
+    }
+
+    /**
+     * Legacy method for backward compatibility - waits for any response
+     * @deprecated Use {@link #waitForResponse(long, String)} instead
+     */
+    @Deprecated
+    public static String waitForResponse(long timeoutMs) {
         return null;
     }
 }

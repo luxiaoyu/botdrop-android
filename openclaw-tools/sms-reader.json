@@ -1,8 +1,8 @@
 {
   "$schema": "https://openclaw.dev/schemas/tool-v1.json",
   "name": "sms-reader",
-  "version": "1.0.0",
-  "description": "Read SMS messages from the Android device running BotDrop",
+  "version": "1.1.0",
+  "description": "Read and search SMS messages from the Android device running BotDrop",
   
   "config": {
     "type": "exec",
@@ -14,7 +14,7 @@
     "action": {
       "type": "string",
       "required": true,
-      "enum": ["latest", "recent", "unread", "check"],
+      "enum": ["latest", "recent", "unread", "check", "search"],
       "description": "The action to perform when reading SMS"
     },
     "limit": {
@@ -23,7 +23,12 @@
       "minimum": 1,
       "maximum": 50,
       "default": 5,
-      "description": "Number of messages to retrieve (only for 'recent' action)"
+      "description": "Number of messages to retrieve (for 'recent' and 'search' actions)"
+    },
+    "keyword": {
+      "type": "string",
+      "required": false,
+      "description": "Keyword to search for in SMS content (for 'search' action, also works with 'recent')"
     }
   },
   
@@ -45,14 +50,16 @@
       }
     },
     "recent": {
-      "description": "Get recent SMS messages",
+      "description": "Get recent SMS messages. Use 'keyword' parameter to filter results.",
       "params": {
-        "limit": { "type": "integer", "default": 5 }
+        "limit": { "type": "integer", "default": 5 },
+        "keyword": { "type": "string", "description": "Optional filter keyword" }
       },
       "returns": {
         "type": "object",
         "properties": {
           "count": { "type": "integer" },
+          "filter_keyword": { "type": "string" },
           "messages": {
             "type": "array",
             "items": {
@@ -68,6 +75,21 @@
               }
             }
           }
+        }
+      }
+    },
+    "search": {
+      "description": "Search SMS messages by keyword across a larger message pool",
+      "params": {
+        "keyword": { "type": "string", "required": true, "description": "Keyword to search for" },
+        "limit": { "type": "integer", "default": 20 }
+      },
+      "returns": {
+        "type": "object",
+        "properties": {
+          "count": { "type": "integer" },
+          "filter_keyword": { "type": "string" },
+          "messages": { "type": "array" }
         }
       }
     },
@@ -97,28 +119,71 @@
   },
   
   "systemPrompt": {
-    "context": "You have access to the device's SMS messages through the sms-reader tool. Use this when the user asks about their text messages, verification codes, or any SMS-related queries.",
+    "context": "You have access to the device's SMS messages through the sms-reader tool. You should proactively use this tool when the user asks about verification codes, OTP, messages, texts, or any SMS-related queries.",
+    "autoTrigger": [
+      "验证码",
+      "verification code",
+      "OTP",
+      "one-time password",
+      "短信",
+      "收到短信",
+      "新消息",
+      "new message",
+      "text message",
+      "last text",
+      "latest message",
+      "unread",
+      "未读",
+      "有什么短信",
+      "what.*sms",
+      "check.*message",
+      "get.*code",
+      "search.*sms"
+    ],
     "guidelines": [
-      "Always ask for confirmation before reading SMS if the request seems sensitive",
+      "AUTOMATICALLY use the sms-reader tool when user asks about verification codes, OTP, messages, texts, or SMS",
+      "For verification code queries, use 'latest' action to get the most recent SMS",
+      "For 'any new messages' queries, use 'unread' action",
+      "For searching specific content, use 'search' action with the keyword parameter",
+      "For filtering recent messages by keyword, use 'recent' action with keyword parameter",
       "Summarize SMS content clearly, highlighting important information like verification codes",
-      "Respect user privacy - don't read SMS unless explicitly requested",
       "If SMS permission is not granted, guide the user to enable it in BotDrop app settings"
     ],
     "examples": [
       {
+        "user": "我收到验证码了吗？",
+        "thought": "User is asking about verification code. I should automatically call sms-reader with 'latest' action.",
+        "toolCall": { "action": "latest" }
+      },
+      {
         "user": "What was my last text message?",
-        "assistant": "Let me check your latest SMS...",
+        "thought": "User wants to know their last text. Call sms-reader with 'latest' action.",
         "toolCall": { "action": "latest" }
       },
       {
         "user": "Any new messages?",
-        "assistant": "I'll check for unread messages.",
+        "thought": "User asking about new/unread messages. Use 'unread' action.",
         "toolCall": { "action": "unread" }
       },
       {
         "user": "Did I get the verification code?",
-        "assistant": "Let me look at your recent messages for a verification code.",
-        "toolCall": { "action": "recent", "limit": 3 }
+        "thought": "User asking about verification code. Use 'latest' to check most recent SMS.",
+        "toolCall": { "action": "latest" }
+      },
+      {
+        "user": "看看最近有什么短信",
+        "thought": "User wants to check recent SMS messages. Use 'recent' action with a reasonable limit.",
+        "toolCall": { "action": "recent", "limit": 10 }
+      },
+      {
+        "user": "Search for messages from 顺丰",
+        "thought": "User wants to search SMS with keyword '顺丰'. Use 'search' action.",
+        "toolCall": { "action": "search", "keyword": "顺丰" }
+      },
+      {
+        "user": "查找包含验证码的短信",
+        "thought": "User wants to find SMS containing '验证码'. Use 'search' action.",
+        "toolCall": { "action": "search", "keyword": "验证码" }
       }
     ]
   }
