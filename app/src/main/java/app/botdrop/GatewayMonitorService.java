@@ -108,6 +108,9 @@ public class GatewayMonitorService extends Service {
         // Monitoring will start automatically when BotDropService is bound
         // (see onServiceConnected callback)
 
+        // Start WebView Bridge Service for OpenClaw browser support
+        startWebViewBridgeService();
+
         // START_STICKY ensures the service is restarted if killed
         return START_STICKY;
     }
@@ -310,6 +313,24 @@ public class GatewayMonitorService extends Service {
         }
 
         return builder.build();
+    }
+
+    /**
+     * Start WebView Bridge Service for OpenClaw browser support.
+     * This provides a CDP-compatible browser endpoint at 127.0.0.1:9222
+     */
+    private void startWebViewBridgeService() {
+        try {
+            Intent serviceIntent = new Intent(this, WebViewBridgeService.class);
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                startForegroundService(serviceIntent);
+            } else {
+                startService(serviceIntent);
+            }
+            Logger.logInfo(LOG_TAG, "WebViewBridgeService started");
+        } catch (Exception e) {
+            Logger.logError(LOG_TAG, "Failed to start WebViewBridgeService: " + e.getMessage());
+        }
     }
 
     /**

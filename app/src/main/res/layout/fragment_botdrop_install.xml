@@ -168,7 +168,7 @@
         android:id="@+id/install_status_message"
         android:layout_width="wrap_content"
         android:layout_height="wrap_content"
-        android:text="This takes about a minute"
+        android:text="This takes about 2 minutes"
         android:textSize="13sp"
         android:textColor="@color/botdrop_secondary_text"
         android:layout_marginBottom="16dp" />

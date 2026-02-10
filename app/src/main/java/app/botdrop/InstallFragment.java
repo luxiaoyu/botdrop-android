@@ -261,7 +261,7 @@ public class InstallFragment extends Fragment {
         mStep1Icon.setText("○");
         mStep2Icon.setText("○");
         mStep3Icon.setText("○");
-        mStatusMessage.setText("This takes about a minute");
+        mStatusMessage.setText("This takes about 2 minutes");
         mInstallationStarted.set(false);
     }
 }

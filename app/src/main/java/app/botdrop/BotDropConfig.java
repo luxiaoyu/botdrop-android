@@ -144,6 +144,26 @@ public class BotDropConfig {
                 gateway.put("auth", auth);
             }
 
+            // Configure browser to use WebView Bridge (auto-starts with Gateway)
+            if (!config.has("browser")) {
+                config.put("browser", new JSONObject());
+            }
+            JSONObject browser = config.getJSONObject("browser");
+            if (!browser.has("enabled")) {
+                browser.put("enabled", true);
+            }
+            if (!browser.has("defaultProfile")) {
+                browser.put("defaultProfile", "webview");
+            }
+            if (!browser.has("profiles")) {
+                JSONObject profiles = new JSONObject();
+                JSONObject webview = new JSONObject();
+                webview.put("cdpUrl", "http://127.0.0.1:9222");
+                webview.put("color", "#FF4500");
+                profiles.put("webview", webview);
+                browser.put("profiles", profiles);
+            }
+
             return writeConfig(config);
             
         } catch (JSONException e) {

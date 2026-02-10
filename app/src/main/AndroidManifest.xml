@@ -121,6 +121,15 @@
                 android:value="Keep OpenClaw gateway alive" />
         </service>
 
+        <service
+            android:name="app.botdrop.WebViewBridgeService"
+            android:exported="false"
+            android:foregroundServiceType="specialUse">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="CDP bridge for OpenClaw browser control" />
+        </service>
+
         <activity
             android:name=".app.activities.HelpActivity"
             android:exported="false"
