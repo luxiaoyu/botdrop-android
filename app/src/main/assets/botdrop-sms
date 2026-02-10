@@ -4,85 +4,143 @@
 # Helper script for OpenClaw to read SMS messages from Android
 # 
 # Usage:
-#   botdrop-sms latest              - Get the latest SMS message
-#   botdrop-sms recent [n]          - Get n recent messages (default: 5)
-#   botdrop-sms search <keyword>    - Search messages by keyword
-#   botdrop-sms unread              - Get all unread messages
-#   botdrop-sms check               - Check if SMS permission is granted
+#   botdrop-sms latest                      - Get the latest SMS message
+#   botdrop-sms recent [n]                  - Get n recent messages (default: 5)
+#   botdrop-sms search <keyword>            - Search messages by keyword
+#   botdrop-sms from <sender> [n]           - Get messages from specific sender
+#   botdrop-sms unread                      - Get all unread messages
+#   botdrop-sms stats                       - Get SMS statistics
+#   botdrop-sms senders [n]                 - Get top senders list
+#   botdrop-sms inbox [n]                   - Get inbox messages only
+#   botdrop-sms sent [n]                    - Get sent messages only
+#   botdrop-sms dates <from> <to> [n]       - Get messages in date range (timestamps)
+#   botdrop-sms period <period> [n]         - Get messages from last period (1d, 7d, 30d)
+#   botdrop-sms regex <pattern> [n]         - Search using regex pattern
+#   botdrop-sms query [json]                - Advanced query with JSON filters
+#   botdrop-sms check                       - Check if SMS permission is granted
 #
 
-set -e
+# Don't use set -e as it causes issues with pipeline and jq
+# set -e
 
 SMS_DIR="$HOME/.openclaw/sms"
 REQUEST_FILE="$SMS_DIR/sms_request.json"
 RESPONSE_PREFIX="sms_response_"
 RESPONSE_SUFFIX=".json"
-TIMEOUT=10
+TIMEOUT=15
 
-# Timestamp for this request
 REQUEST_TIMESTAMP=""
 
-# Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
 YELLOW='\033[1;33m'
-NC='\033[0m' # No Color
+NC='\033[0m'
 
 show_help() {
     cat << EOF
-BotDrop SMS Tool - Read SMS messages from your Android device
+BotDrop SMS Tool - Read and search SMS messages from your Android device
 
 Usage: botdrop-sms <command> [options]
 
 Commands:
-  latest              Get the most recent SMS message
-  recent [n]          Get n recent messages (default: 5)
-  search <keyword>    Search SMS messages by keyword
-  unread              Get all unread SMS messages
-  check               Check if SMS permission is granted
-  help                Show this help message
+  latest                          Get the most recent SMS message
+  recent [n]                      Get n recent messages (default: 5)
+  search <keyword> [n]            Search SMS messages by keyword
+  from <sender> [n]               Get messages from specific sender/number
+  unread                          Get all unread SMS messages
+  stats                           Get SMS statistics (total, unread, etc.)
+  senders [n]                     Get list of senders with message counts
+  inbox [n]                       Get inbox messages only
+  sent [n]                        Get sent messages only
+  dates <from_ts> <to_ts> [n]     Get messages in date range (Unix timestamps ms)
+  period <period> [n]             Get messages from last period (1d, 7d, 30d)
+  regex <pattern> [n]             Search using regex pattern
+  query '<json>'                  Advanced query with JSON filters
+  check                           Check if SMS permission is granted
+  help                            Show this help message
+
+Query JSON examples:
+  botdrop-sms query '{"sender":"95588","limit":5}'
+  botdrop-sms query '{"keywords":["验证码","code"],"limit":10}'
+  botdrop-sms query '{"type":"inbox","read":false}'
+  botdrop-sms query '{"date_from":1704067200000,"date_to":1706745600000}'
 
 Examples:
   botdrop-sms latest
   botdrop-sms recent 10
   botdrop-sms search 验证码
-  botdrop-sms unread
+  botdrop-sms from 顺丰
+  botdrop-sms from +8613800138000 20
+  botdrop-sms period 7d
+  botdrop-sms regex "\\d{6}" 10
+  botdrop-sms query '{"sender":"10086","keyword":"流量"}'
 
 Note: This requires the BotDrop app to be running with SMS permission granted.
 EOF
 }
 
-# Cleanup function to remove request and response files
-cleanup() {
-#    local timestamp="$1"
-#    rm -f "$REQUEST_FILE"
-#    if [ -n "$timestamp" ]; then
-#        rm -f "$SMS_DIR/${RESPONSE_PREFIX}${timestamp}.json"
-#    fi
+# JSON escape helper
+json_escape() {
+    local str="$1"
+    # Escape backslashes, quotes, and newlines
+    printf '%s' "$str" | sed 's/\\/\\\\/g; s/"/\\"/g; s/\n/\\n/g; s/\r//g'
 }
 
-# Create request file
+# Cleanup function
+cleanup() {
+    local timestamp="$1"
+    rm -f "$REQUEST_FILE"
+    if [ -n "$timestamp" ]; then
+        rm -f "$SMS_DIR/${RESPONSE_PREFIX}${timestamp}.json"
+    fi
+}
+
+# Create request file with JSON content
+create_request_json() {
+    local json_content="$1"
+    mkdir -p "$SMS_DIR"
+    REQUEST_TIMESTAMP=$(date +%s%3N 2>/dev/null || echo $(($(date +%s) * 1000)))
+    echo "$json_content" > "$REQUEST_FILE"
+    chmod 644 "$REQUEST_FILE"
+}
+
+# Create simple request
 create_request() {
     local action="$1"
     local limit="${2:-10}"
-    local keyword="${3:-}"
     
     mkdir -p "$SMS_DIR"
+    REQUEST_TIMESTAMP=$(date +%s%3N 2>/dev/null || echo $(($(date +%s) * 1000)))
     
-    # Generate timestamp (milliseconds since epoch)
-    REQUEST_TIMESTAMP=$(date +%s%3N)
+    echo '{"action":"'$action'","limit":'$limit',"timestamp":"'$REQUEST_TIMESTAMP'"}' > "$REQUEST_FILE"
+    chmod 644 "$REQUEST_FILE"
+}
+
+# Create request with keyword
+create_request_with_keyword() {
+    local action="$1"
+    local limit="$2"
+    local keyword="$3"
     
-    if [ "$action" = "search" ] && [ -n "$keyword" ]; then
-        # URL-encode or escape the keyword for JSON (basic escaping)
-        local escaped_keyword=$(echo "$keyword" | sed 's/"/\\"/g' | sed 's/\\/\\\\/g')
-        echo '{"action":"search","keyword":"'$escaped_keyword'","limit":'$limit',"timestamp":"'$REQUEST_TIMESTAMP'"}' > "$REQUEST_FILE"
-    elif [ "$action" = "get_recent" ]; then
-        echo '{"action":"'$action'","limit":'$limit',"timestamp":"'$REQUEST_TIMESTAMP'"}' > "$REQUEST_FILE"
-    else
-        echo '{"action":"'$action'","timestamp":"'$REQUEST_TIMESTAMP'"}' > "$REQUEST_FILE"
-    fi
+    mkdir -p "$SMS_DIR"
+    REQUEST_TIMESTAMP=$(date +%s%3N 2>/dev/null || echo $(($(date +%s) * 1000)))
     
-    # Set permissions so Android can read
+    local escaped_kw=$(json_escape "$keyword")
+    echo '{"action":"'$action'","keyword":"'$escaped_kw'","limit":'$limit',"timestamp":"'$REQUEST_TIMESTAMP'"}' > "$REQUEST_FILE"
+    chmod 644 "$REQUEST_FILE"
+}
+
+# Create request with sender
+create_request_with_sender() {
+    local action="$1"
+    local limit="$2"
+    local sender="$3"
+    
+    mkdir -p "$SMS_DIR"
+    REQUEST_TIMESTAMP=$(date +%s%3N 2>/dev/null || echo $(($(date +%s) * 1000)))
+    
+    local escaped_sender=$(json_escape "$sender")
+    echo '{"action":"'$action'","sender":"'$escaped_sender'","limit":'$limit',"timestamp":"'$REQUEST_TIMESTAMP'"}' > "$REQUEST_FILE"
     chmod 644 "$REQUEST_FILE"
 }
 
@@ -108,7 +166,17 @@ wait_for_response() {
     return 1
 }
 
-# Check if we're in termux-chroot environment
+# Output with optional jq formatting
+output_response() {
+    local response="$1"
+    # Try to format with jq if available, otherwise output as-is
+    if command -v jq >/dev/null 2>&1; then
+        echo "$response" | jq . 2>/dev/null || echo "$response"
+    else
+        echo "$response"
+    fi
+}
+
 check_environment() {
     if [ -n "$TERMUX_CHROOT" ]; then
         echo -e "${YELLOW}Warning: Running inside termux-chroot. SMS requests may be delayed.${NC}"
@@ -120,42 +188,182 @@ case "${1:-help}" in
     latest)
         check_environment
         create_request "get_latest"
-        wait_for_response "$REQUEST_TIMESTAMP" | jq . 2>/dev/null || wait_for_response "$REQUEST_TIMESTAMP"
+        response=$(wait_for_response "$REQUEST_TIMESTAMP")
+        output_response "$response"
         ;;
     
     recent)
         check_environment
         limit="${2:-5}"
-        if ! echo "$limit" | grep -q '^[0-9]+$'; then
+        if ! echo "$limit" | grep -qE '^[0-9]+$'; then
             echo -e "${RED}Error: Limit must be a number${NC}"
             exit 1
         fi
         create_request "get_recent" "$limit"
-        wait_for_response "$REQUEST_TIMESTAMP" | jq . 2>/dev/null || wait_for_response "$REQUEST_TIMESTAMP"
+        response=$(wait_for_response "$REQUEST_TIMESTAMP")
+        output_response "$response"
         ;;
     
     search)
         check_environment
         keyword="${2:-}"
+        limit="${3:-20}"
         if [ -z "$keyword" ]; then
             echo -e "${RED}Error: Search keyword is required${NC}"
-            echo "Usage: botdrop-sms search <keyword>"
+            echo "Usage: botdrop-sms search <keyword> [limit]"
             exit 1
         fi
-        # Default to searching up to 100 messages for keyword matches, return up to 20
-        create_request "search" 20 "$keyword"
-        wait_for_response "$REQUEST_TIMESTAMP" | jq . 2>/dev/null || wait_for_response "$REQUEST_TIMESTAMP"
+        if ! echo "$limit" | grep -qE '^[0-9]+$'; then
+            echo -e "${RED}Error: Limit must be a number${NC}"
+            exit 1
+        fi
+        create_request_with_keyword "search" "$limit" "$keyword"
+        response=$(wait_for_response "$REQUEST_TIMESTAMP")
+        output_response "$response"
+        ;;
+    
+    from)
+        check_environment
+        sender="${2:-}"
+        limit="${3:-20}"
+        if [ -z "$sender" ]; then
+            echo -e "${RED}Error: Sender is required${NC}"
+            echo "Usage: botdrop-sms from <sender/number> [limit]"
+            exit 1
+        fi
+        if ! echo "$limit" | grep -qE '^[0-9]+$'; then
+            echo -e "${RED}Error: Limit must be a number${NC}"
+            exit 1
+        fi
+        create_request_with_sender "from" "$limit" "$sender"
+        response=$(wait_for_response "$REQUEST_TIMESTAMP")
+        output_response "$response"
         ;;
     
     unread)
         check_environment
         create_request "get_unread"
-        wait_for_response "$REQUEST_TIMESTAMP" | jq . 2>/dev/null || wait_for_response "$REQUEST_TIMESTAMP"
+        response=$(wait_for_response "$REQUEST_TIMESTAMP")
+        output_response "$response"
+        ;;
+    
+    stats)
+        create_request "stats"
+        response=$(wait_for_response "$REQUEST_TIMESTAMP")
+        output_response "$response"
+        ;;
+    
+    senders)
+        limit="${2:-20}"
+        if ! echo "$limit" | grep -qE '^[0-9]+$'; then
+            echo -e "${RED}Error: Limit must be a number${NC}"
+            exit 1
+        fi
+        create_request "senders" "$limit"
+        response=$(wait_for_response "$REQUEST_TIMESTAMP")
+        output_response "$response"
+        ;;
+    
+    inbox)
+        limit="${2:-20}"
+        if ! echo "$limit" | grep -qE '^[0-9]+$'; then
+            echo -e "${RED}Error: Limit must be a number${NC}"
+            exit 1
+        fi
+        create_request "by_type" "$limit"
+        # Modify request to add type field
+        sed -i 's/"action":"by_type"/"action":"by_type","type":"inbox"/' "$REQUEST_FILE"
+        response=$(wait_for_response "$REQUEST_TIMESTAMP")
+        output_response "$response"
+        ;;
+    
+    sent)
+        limit="${2:-20}"
+        if ! echo "$limit" | grep -qE '^[0-9]+$'; then
+            echo -e "${RED}Error: Limit must be a number${NC}"
+            exit 1
+        fi
+        create_request "by_type" "$limit"
+        sed -i 's/"action":"by_type"/"action":"by_type","type":"sent"/' "$REQUEST_FILE"
+        response=$(wait_for_response "$REQUEST_TIMESTAMP")
+        output_response "$response"
+        ;;
+    
+    dates)
+        from_ts="${2:-}"
+        to_ts="${3:-}"
+        limit="${4:-50}"
+        if [ -z "$from_ts" ] || [ -z "$to_ts" ]; then
+            echo -e "${RED}Error: Both from and to timestamps are required${NC}"
+            echo "Usage: botdrop-sms dates <from_timestamp> <to_timestamp> [limit]"
+            exit 1
+        fi
+        mkdir -p "$SMS_DIR"
+        REQUEST_TIMESTAMP=$(date +%s%3N 2>/dev/null || echo $(($(date +%s) * 1000)))
+        echo '{"action":"date_range","from":'$from_ts',"to":'$to_ts',"limit":'$limit',"timestamp":"'$REQUEST_TIMESTAMP'"}' > "$REQUEST_FILE"
+        chmod 644 "$REQUEST_FILE"
+        response=$(wait_for_response "$REQUEST_TIMESTAMP")
+        output_response "$response"
+        ;;
+    
+    period)
+        period="${2:-}"
+        limit="${3:-50}"
+        if [ -z "$period" ]; then
+            echo -e "${RED}Error: Period is required${NC}"
+            echo "Usage: botdrop-sms period <period> [limit]"
+            echo "Periods: 1d (1 day), 7d (7 days), 30d (30 days)"
+            exit 1
+        fi
+        mkdir -p "$SMS_DIR"
+        REQUEST_TIMESTAMP=$(date +%s%3N 2>/dev/null || echo $(($(date +%s) * 1000)))
+        echo '{"action":"date_range","period":"'$period'","limit":'$limit',"timestamp":"'$REQUEST_TIMESTAMP'"}' > "$REQUEST_FILE"
+        chmod 644 "$REQUEST_FILE"
+        response=$(wait_for_response "$REQUEST_TIMESTAMP")
+        output_response "$response"
+        ;;
+    
+    regex)
+        pattern="${2:-}"
+        limit="${3:-50}"
+        if [ -z "$pattern" ]; then
+            echo -e "${RED}Error: Regex pattern is required${NC}"
+            echo "Usage: botdrop-sms regex <pattern> [limit]"
+            echo "Example: botdrop-sms regex '\\d{6}' 10  (find 6-digit codes)"
+            exit 1
+        fi
+        mkdir -p "$SMS_DIR"
+        REQUEST_TIMESTAMP=$(date +%s%3N 2>/dev/null || echo $(($(date +%s) * 1000)))
+        local escaped_pattern=$(json_escape "$pattern")
+        echo '{"action":"regex","pattern":"'$escaped_pattern'","limit":'$limit',"timestamp":"'$REQUEST_TIMESTAMP'"}' > "$REQUEST_FILE"
+        chmod 644 "$REQUEST_FILE"
+        response=$(wait_for_response "$REQUEST_TIMESTAMP")
+        output_response "$response"
+        ;;
+    
+    query)
+        query_json="${2:-}"
+        if [ -z "$query_json" ]; then
+            echo -e "${RED}Error: Query JSON is required${NC}"
+            echo "Usage: botdrop-sms query '<json>'"
+            echo "Example: botdrop-sms query '{\"sender\":\"10086\",\"limit\":5}'"
+            exit 1
+        fi
+        mkdir -p "$SMS_DIR"
+        REQUEST_TIMESTAMP=$(date +%s%3N 2>/dev/null || echo $(($(date +%s) * 1000)))
+        # Inject action and timestamp into the JSON
+        # Remove trailing } if present, add action and timestamp
+        query_json="${query_json%\}}"
+        echo "$query_json,\"action\":\"query\",\"timestamp\":\"$REQUEST_TIMESTAMP\"}" > "$REQUEST_FILE"
+        chmod 644 "$REQUEST_FILE"
+        response=$(wait_for_response "$REQUEST_TIMESTAMP")
+        output_response "$response"
         ;;
     
     check)
         create_request "check_permission"
-        wait_for_response "$REQUEST_TIMESTAMP" | jq . 2>/dev/null || wait_for_response "$REQUEST_TIMESTAMP"
+        response=$(wait_for_response "$REQUEST_TIMESTAMP")
+        output_response "$response"
         ;;
     
     help|--help|-h)
