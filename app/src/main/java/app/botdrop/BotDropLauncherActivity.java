@@ -291,7 +291,7 @@ public class BotDropLauncherActivity extends Activity {
             JSONObject config = BotDropConfig.readConfig();
             if (config.has("channels")) {
                 JSONObject channels = config.getJSONObject("channels");
-                return channels.has("telegram") || channels.has("discord");
+                return channels.has("telegram") || channels.has("discord") || channels.has("feishu");
             }
             return false;
         } catch (Exception e) {
