@@ -85,7 +85,7 @@ All responses are in JSON format:
   "date": "2026-02-09 18:00:00",
   "read": false,
   "type": "inbox"
-}
+  }
 ```
 
 ## Examples
